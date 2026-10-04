@@ -1,0 +1,2067 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#ECF1EF">
+    <title>Entgelt (Offline-App)</title>
+
+    <!-- Darstellung (hell/dunkel) vor dem ersten Rendern setzen, damit nichts aufblitzt -->
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('theme'); } catch (e) {}
+            if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            document.documentElement.dataset.theme = t;
+            var b = '0'; try { b = localStorage.getItem('blur') === '1' ? '1' : '0'; } catch (e) {}
+            document.documentElement.dataset.blur = b;
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+
+    <style>
+        :root {
+            --pad: 16px;
+            --font-display: "Bricolage Grotesque", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+            --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+            color-scheme: light;
+            --bg: #ECF1EF;
+            --plate: #FFFFFF;
+            --line: rgba(16, 31, 51, .10);
+            --ink: #101F33;
+            --muted: #566579;
+            --faint: #8794A5;
+            --netto: #14A38B;
+            --abzug: #D6336C;
+            --brutto: #4A5CF0;
+            --sonst: #E3A008;
+            --pos: #0B7A68;  --pos-bg: rgba(20, 163, 139, .14);
+            --neg: #B4234F;  --neg-bg: rgba(214, 51, 108, .11);
+            --amber: #8A5A00; --amber-bg: rgba(227, 160, 8, .17);
+            --glass: rgba(236, 241, 239, .78);
+            --tip: #101F33;
+            --dock-shadow: 0 14px 34px -14px rgba(16, 31, 51, .45);
+        }
+        [data-theme="dark"] {
+            color-scheme: dark;
+            --bg: #0A1322;
+            --plate: #111D33;
+            --line: rgba(232, 238, 247, .11);
+            --ink: #E8EEF7;
+            --muted: #9AA9BD;
+            --faint: #6E7D92;
+            --pos: #4DD6BE;  --pos-bg: rgba(77, 214, 190, .14);
+            --neg: #FF7AA2;  --neg-bg: rgba(255, 122, 162, .14);
+            --amber: #F2C14E; --amber-bg: rgba(242, 193, 78, .15);
+            --glass: rgba(10, 19, 34, .78);
+            --tip: #1C2B47;
+            --dock-shadow: 0 14px 34px -14px rgba(0, 0, 0, .8);
+        }
+        @media (min-width: 760px) { :root { --pad: 28px; } }
+
+        * { box-sizing: border-box; }
+        html { -webkit-text-size-adjust: 100%; }
+        body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); line-height: 1.45; }
+        a { color: inherit; }
+        :focus-visible { outline: 2px solid var(--brutto); outline-offset: 2px; }
+        .faint { color: var(--faint); }
+
+        .wrap { max-width: 1180px; margin: 0 auto; padding: 22px var(--pad) 140px; }
+
+        /* ---------- Obere Leiste (Glas) ---------- */
+        .top { position: sticky; top: 0; z-index: 100; background: var(--glass);
+               -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+               border-bottom: 1px solid var(--line); }
+        .top-in { max-width: 1180px; margin: 0 auto; padding: 10px var(--pad) 8px; }
+        .top-row { display: flex; align-items: center; justify-content: space-between; }
+        .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; }
+        .icon-btn { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--ink);
+                    display: grid; place-items: center; cursor: pointer; }
+        .icon-btn:active { transform: scale(.94); }
+        .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px; scrollbar-width: none; }
+        .chips::-webkit-scrollbar { display: none; }
+        .chip { flex: 0 0 auto; padding: 7px 15px; border-radius: 999px; border: 1px solid var(--line); background: transparent;
+                color: var(--ink); font: inherit; font-size: .92rem; text-decoration: none; cursor: pointer;
+                transition: background .15s, color .15s; }
+        .chip.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+        /* ---------- Schwebende Navigation unten ---------- */
+        .dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 200;
+                display: flex; gap: 4px; padding: 6px; border-radius: 999px; background: var(--glass);
+                -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%);
+                border: 1px solid var(--line); box-shadow: var(--dock-shadow); }
+        .dock a { display: flex; align-items: center; gap: 8px; padding: 11px 17px; border-radius: 999px; color: var(--muted);
+                  text-decoration: none; font-weight: 600; font-size: .92rem; transition: background .2s, color .2s; }
+        .dock a.on { background: var(--ink); color: var(--bg); }
+        @media (max-width: 560px) { .dock a:not(.on) .lbl { display: none; } .dock a:not(.on) { padding: 11px 14px; } }
+        .ico { position: relative; display: inline-flex; }
+        .badge { position: absolute; top: -7px; right: -9px; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+                 background: var(--abzug); color: #fff; font: 700 .68rem/17px var(--font-body); text-align: center; font-style: normal; }
+
+        /* ---------- Typografie ---------- */
+        .page-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem, 6vw, 2.6rem); letter-spacing: -.025em; margin: 4px 0 2px; line-height: 1.1; }
+        .lede { color: var(--muted); margin: 0 0 20px; }
+        .sec-title { font-family: var(--font-display); font-weight: 650; font-size: 1.1rem; letter-spacing: -.01em; margin: 0; }
+        .sec-sub { color: var(--muted); font-size: .86rem; margin: 3px 0 14px; }
+        .section-gap { margin-top: 30px; }
+
+        /* ---------- Lohnstreifen (Jahres-Hero) ---------- */
+        .slip { background: var(--plate); border: 1px solid var(--line); border-radius: 28px; margin-bottom: 20px; }
+        .slip-top { padding: 22px 22px 20px; }
+        .slip-bottom { padding: 18px 22px 22px; }
+        .slip-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .year { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; letter-spacing: -.02em; margin: 0; }
+        .pill { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px; font-size: .82rem; font-weight: 600;
+                color: var(--muted); border: 1px solid var(--line); }
+        .hero-label { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+        .hero-num { font-family: var(--font-display); font-weight: 700; font-size: clamp(2.6rem, 12vw, 4.6rem); letter-spacing: -.035em;
+                    line-height: 1; margin: 6px 0 12px; font-variation-settings: "opsz" 96; }
+        .cents { font-size: .5em; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+        .hero-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--muted); font-size: .92rem; }
+        .perf { position: relative; margin: 0 22px; border-top: 2px dashed var(--line); }
+        .perf::before, .perf::after { content: ""; position: absolute; top: -13px; width: 24px; height: 24px; border-radius: 50%; background: var(--bg); }
+        .perf::before { left: -35px; }
+        .perf::after { right: -35px; }
+
+        .split { display: flex; gap: 3px; height: 24px; margin: 12px 0 16px; }
+        .split .seg { border-radius: 8px; min-width: 5px; }
+        .seg.netto { background: var(--netto); }
+        .seg.abzug { background: var(--abzug); }
+        .seg.sonst { background: var(--sonst); }
+        .seg.rest { background: repeating-linear-gradient(45deg, var(--line), var(--line) 4px, transparent 4px, transparent 8px); }
+        .reveal { animation: reveal .95s .1s cubic-bezier(.2, .8, .2, 1) both; }
+        @keyframes reveal { from { clip-path: inset(0 100% 0 0 round 10px); } to { clip-path: inset(0 0 0 0 round 10px); } }
+        @media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
+
+        .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 18px; list-style: none; padding: 0; margin: 0; }
+        .legend .k { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: .88rem; }
+        .legend .k i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+        .legend .v { font-family: var(--font-display); font-weight: 650; font-size: 1.1rem; display: block; }
+        .legend .p { color: var(--muted); font-size: .86rem; }
+
+        /* ---------- Kennzahlen-Raster (Haarlinien statt Einzelkarten) ---------- */
+        .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 22px; overflow: hidden;
+                 background: var(--plate); border: 1px solid var(--line); }
+        .stats.auto { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+        .stat { padding: 16px 18px; outline: 1px solid var(--line); outline-offset: -.5px; min-width: 0; }
+        @media (min-width: 760px) { .stats:not(.auto) { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .stat .k { color: var(--muted); font-size: .88rem; }
+        .stat .v { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.2rem, 5.4vw, 1.55rem); letter-spacing: -.02em; margin: 3px 0 2px; overflow-wrap: anywhere; }
+        .stat .s { color: var(--muted); font-size: .86rem; }
+
+        .delta { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+        .delta.up { color: var(--pos); background: var(--pos-bg); }
+        .delta.down { color: var(--neg); background: var(--neg-bg); }
+
+        /* ---------- Flächen / Diagramme ---------- */
+        .plate { background: var(--plate); border: 1px solid var(--line); border-radius: 24px; padding: 20px; min-width: 0; }
+        .grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+        @media (min-width: 900px) { .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .span2 { grid-column: 1 / -1; } }
+        .canvas-wrap { position: relative; height: 300px; }
+        .canvas-wrap.tall { height: 340px; }
+        .hint { color: var(--muted); font-size: .86rem; margin: 10px 0 0; }
+        .foot { color: var(--faint); font-size: .84rem; margin: 26px 0 0; }
+
+        /* ---------- Tabellen ---------- */
+        .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 20px; background: var(--plate); }
+        table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        th { font-weight: 600; font-size: .82rem; color: var(--muted); text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        td { padding: 12px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        tbody tr:last-child td { border-bottom: 0; }
+        td.num, th.num { text-align: right; }
+        th:first-child, td:first-child { position: sticky; left: 0; background: var(--plate); z-index: 1; font-weight: 600; }
+        tbody tr:hover td:not(:first-child) { background: rgba(127, 127, 127, .07); }
+        tr.fehlt td:not(:first-child) { color: var(--faint); }
+        @media (max-width: 520px) { th, td { padding-left: 9px; padding-right: 9px; } }
+
+        .st { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+        .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .st.ok { color: var(--pos); background: var(--pos-bg); }
+        .st.null { color: var(--amber); background: var(--amber-bg); }
+        .st.fehlt { color: var(--neg); background: var(--neg-bg); }
+        .warnchip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 600; color: var(--amber); background: var(--amber-bg); }
+        .pdf-link { display: inline-block; padding: 2px 9px; margin-right: 4px; border-radius: 999px; border: 1px solid var(--line);
+                    font-size: .8rem; text-decoration: none; color: var(--ink); }
+        .pdf-link:hover { background: var(--ink); color: var(--bg); }
+
+        /* ---------- Entgeltgruppen-Zeitstrahl ---------- */
+        .egstrip { display: flex; gap: 3px; height: 50px; margin: 6px 0 16px; }
+        .egseg { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 650; font-size: .92rem;
+                 text-shadow: 0 1px 2px rgba(0, 0, 0, .25); overflow: hidden; white-space: nowrap; min-width: 0; border-radius: 12px; }
+        .track-label { color: var(--muted); font-size: .85rem; margin: 4px 0 6px; }
+        .egstrip.slim { height: 38px; margin-bottom: 10px; }
+        .egseg.leer { background: repeating-linear-gradient(45deg, var(--line), var(--line) 4px, transparent 4px, transparent 8px) !important;
+                      color: var(--faint); text-shadow: none; }
+        .axis { display: flex; justify-content: space-between; color: var(--faint); font-size: .8rem; margin: 2px 0 20px; }
+        .steps { list-style: none; margin: 0; padding: 0; }
+        .step { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 14px; position: relative; padding-bottom: 22px; }
+        .step:last-child { padding-bottom: 0; }
+        .step::before { content: ""; position: absolute; left: 10px; top: 26px; bottom: -4px; width: 2px; background: var(--line); }
+        .step:last-child::before { display: none; }
+        .pin { width: 22px; height: 22px; border-radius: 50%; border: 6px solid var(--c); background: var(--plate); margin-top: 1px; }
+        .step-title { font-family: var(--font-display); font-weight: 650; font-size: 1.05rem; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .step-meta { color: var(--muted); font-size: .88rem; margin-top: 3px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .chipline { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .chipline .delta { white-space: normal; max-width: 100%; text-wrap: balance; }
+        .delta.flat { color: var(--muted); background: var(--line); }
+
+        /* ---------- Vergleichs-Filter ---------- */
+        .filter { margin: 4px 0 20px; display: grid; gap: 18px; }
+        .filter .grp-title { font-weight: 600; font-size: .9rem; margin: 0 0 8px; }
+        .togs { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tog { position: relative; }
+        .tog input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+        .tog span { display: inline-block; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); transition: background .15s, color .15s; }
+        .tog input:checked + span { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+        .tog input:focus-visible + span { outline: 2px solid var(--brutto); outline-offset: 2px; }
+        .row-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; }
+        .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+        .check input { width: 18px; height: 18px; accent-color: var(--netto); }
+        select { padding: 9px 14px; font: inherit; border-radius: 12px; border: 1px solid var(--line); background: var(--plate); color: var(--ink); }
+        .btn { background: var(--ink); color: var(--bg); border: 0; border-radius: 999px; padding: 11px 26px; font: inherit; font-weight: 650; cursor: pointer; justify-self: start; }
+        .btn:active { transform: scale(.97); }
+        .empty { color: var(--muted); }
+
+        [hidden] { display: none !important; }
+
+        /* ---------- Erhöhungs-Markierung an den Jahres-Chips ---------- */
+        .raise { color: #12A150; font-size: .72em; margin-right: 6px; line-height: 1; }
+        .chip.active .raise { color: #34D399; }
+        [data-theme="dark"] .chip .raise { color: #34D399; }
+        [data-theme="dark"] .chip.active .raise { color: #0B8A4A; }
+
+        /* ---------- Prüfen ---------- */
+        .issues { display: grid; gap: 12px; margin-top: 16px; }
+        .issue { padding: 16px 18px; border-radius: 20px; }
+        .issue-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .issue-title { font-family: var(--font-display); font-weight: 650; font-size: 1.1rem; margin: 0; }
+        .issue-row + .issue-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+        .issue-hint { color: var(--muted); font-size: .9rem; margin: 6px 0 0; }
+        .note { margin-top: 16px; color: var(--muted); }
+        .ok-state { display: flex; align-items: center; gap: 16px; }
+        .ok-state svg { flex: 0 0 auto; color: var(--netto); }
+        .ok-state h2 { margin: 0 0 2px; }
+        .fold { margin-top: 16px; }
+        .fold summary { cursor: pointer; font-family: var(--font-display); font-weight: 650; font-size: 1.05rem; }
+        .fold summary .faint { font-family: var(--font-body); font-weight: 400; font-size: .88rem; margin-left: 8px; }
+        .fold-row { padding: 12px 0; border-top: 1px solid var(--line); }
+        .fold-row:first-of-type { margin-top: 12px; }
+        .fold-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .fold-months { color: var(--muted); font-size: .86rem; margin-top: 6px; }
+        .btn-quiet { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 7px 15px;
+                     font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+        .btn-quiet:hover { border-color: var(--ink); }
+        .issue-actions { margin-top: 12px; }
+        .done-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .done-form input { flex: 1 1 220px; min-width: 0; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line);
+                           background: var(--plate); color: var(--ink); font: inherit; }
+        .btn.small { padding: 9px 20px; }
+        /* ---------- Antippbare Kacheln und Diagramm-Pop-up ---------- */
+        .stat > span { display: block; }
+        .stat > span.pill { display: inline-flex; align-self: flex-start; margin-top: 8px; }
+        .stat .delta { white-space: normal; }
+        .stat .pill { white-space: normal; line-height: 1.3; border-radius: 14px; padding: 4px 11px; }
+        .stat-btn > .k { padding-right: 40px; }
+        .stat .k { hyphens: auto; overflow-wrap: break-word; }
+        .stat-btn { position: relative; display: flex; flex-direction: column; justify-content: flex-start; width: 100%; text-align: left; font: inherit; color: inherit;
+                    background: transparent; border: 0; cursor: pointer; transition: background .15s; }
+        .stat-btn:hover { background: rgba(127, 127, 127, .06); }
+        .stat-btn:active { background: rgba(127, 127, 127, .12); }
+        .peek { color: var(--faint); flex: 0 0 auto; }
+        .stat-btn .peek { position: absolute; top: 16px; right: 16px; }
+        .hero-btn { display: inline-flex; align-items: center; gap: 14px; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; }
+        .hero-btn .peek { margin-top: .5em; }
+        .hero-btn:hover .peek { color: var(--ink); }
+
+        .sheet { border: 0; padding: 0; background: var(--plate); color: var(--ink); width: 100%; max-width: 100%; max-height: 90vh;
+                 margin: auto 0 0; border-radius: 28px 28px 0 0; overflow: auto; box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, .5); }
+        .sheet::backdrop { background: rgba(8, 16, 30, .55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+        @media (min-width: 760px) { .sheet { width: min(680px, calc(100% - 40px)); margin: auto; border-radius: 28px; } }
+        .sheet[open] { animation: sheet-in .28s cubic-bezier(.2, .8, .2, 1); }
+        @keyframes sheet-in { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) { .sheet[open] { animation: none; } }
+        body:has(dialog[open]) { overflow: hidden; }
+        .sheet-in { padding: 10px 20px 24px; }
+        .sheet-grab { width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 12px; }
+        .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+        .sheet-chart { position: relative; height: 280px; }
+        .minis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-top: 16px; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+        .minis:empty { display: none; }
+        .mini { padding: 12px 14px; outline: 1px solid var(--line); outline-offset: -.5px; }
+        .mini .k { display: block; color: var(--muted); font-size: .84rem; }
+        .mini .v { display: block; font-family: var(--font-display); font-weight: 650; font-size: 1.05rem; margin-top: 2px; }
+
+        .seg-tabs { display: flex; flex-wrap: nowrap; gap: 4px; padding: 4px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
+                    margin: 4px 0 12px; width: 100%; max-width: 440px; }
+        .seg-tabs[hidden] { display: none; }
+        .seg-tabs button { flex: 1 1 0; min-width: 0; white-space: nowrap; text-align: center; border: 0; background: transparent; color: var(--muted);
+                           font: inherit; font-weight: 600; font-size: .88rem; padding: 8px 8px; border-radius: 999px; cursor: pointer;
+                           transition: background .15s, color .15s; }
+        .seg-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+        /* ---------- Schichtarbeit ---------- */
+        .mstrip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 14px 0 4px; }
+        @media (min-width: 760px) { .mstrip { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+        .mcell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 10px 4px; border-radius: 14px;
+                 border: 1px solid var(--line); background: rgba(79, 70, 229, var(--a, 0)); color: var(--ink); font: inherit; cursor: pointer; transition: transform .12s; }
+        .mcell:active:not(:disabled) { transform: scale(.96); }
+        .mcell:disabled { cursor: default; opacity: .55; }
+        .mcell .mn { font-size: .78rem; color: var(--muted); }
+        .mcell .mv { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
+        .mcell.dunkel, .mcell.dunkel .mn { color: #fff; }
+        .zlist { margin-top: 12px; }
+        .zrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+        .zrow:first-child { border-top: 0; }
+        .zrow .zb { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .zrow .zb i { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; background: var(--faint); }
+        .zrow .zb i.sonntag_nacht { background: #4F46E5; }
+        .zrow .zb i.sonntag_mehr { background: #F59E0B; }
+        .zrow .zv { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+        .zrow .zs, .zrow .zw { color: var(--muted); font-size: .86rem; }
+        .zrow.ignoriert .zb, .zrow.ignoriert .zv { opacity: .5; }
+        tr.summe td { font-weight: 700; background: rgba(127, 127, 127, .06); }
+        .zrow .zw { text-align: right; }
+        /* ---------- Gruppen ---------- */
+        .group-title { font-family: var(--font-display); font-weight: 650; font-size: 1.15rem; letter-spacing: -.01em; margin: 0 0 10px; }
+        .group + .group { margin-top: 30px; }
+        .stats:not(.auto) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+        @media (min-width: 760px) {
+            .stats:not(.auto) > :last-child:nth-child(odd) { grid-column: auto; }
+            .stats:not(.auto) > :last-child:nth-child(3n+1) { grid-column: 1 / -1; }
+            .stats:not(.auto) > :last-child:nth-child(3n+2) { grid-column: span 2; }
+        }
+
+        /* ---------- Rufbereitschaft (roter Wecker) ---------- */
+        .wecker { color: #E5383B; vertical-align: -2px; }
+        .mcell { position: relative; }
+        .wbadge { position: absolute; top: -7px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+                  display: grid; place-items: center; box-shadow: 0 0 0 1px rgba(0, 0, 0, .12), 0 2px 4px rgba(0, 0, 0, .15); z-index: 1; }
+        .wbadge .wecker { vertical-align: 0; }
+        .zrow .zb i.ruf { background: #E5383B; }
+        .ruf-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; margin-top: 12px; border-radius: 14px;
+                      background: rgba(229, 56, 59, .12); }
+        .ruf-banner .wecker { margin-top: 2px; flex: 0 0 auto; }
+        .ruf-banner b { display: block; }
+        .ruf-banner span { color: var(--muted); font-size: .88rem; display: block; }
+        /* ---------- Werte verwischen (z. B. um Kollegen die Funktionen zu zeigen) ---------- */
+        .sens { display: inline-block; }
+        html[data-blur="1"] :is(.sens, .delta, td.num, .legend .p, .stat .v, .mcell .mv, .warnchip, .issues .st, .loglist,
+                                .ruf-banner span, .minis .v, .zrow .zv, .zrow .zw, .zrow .zs) {
+            filter: blur(var(--blur, 7px)); -webkit-user-select: none; user-select: none;
+        }
+        html[data-blur="1"] :is(.stat .v, .delta, td.num, .legend .p, .mcell .mv, .warnchip, .issues .st, .loglist,
+                                .ruf-banner span, .minis .v, .zrow .zv, .zrow .zw, .zrow .zs) .sens { filter: none; }
+        html[data-blur="1"] .egseg:not(.leer) { color: transparent; text-shadow: 0 0 10px rgba(255, 255, 255, .95); }
+        /* Achsenbeschriftung der Diagramme verwischen, Tippen und Tooltips abschalten */
+        html[data-blur="1"] .canvas-wrap canvas, html[data-blur="1"] .sheet:not([data-reveal="1"]) .sheet-chart canvas { pointer-events: none; }
+        html[data-blur="1"] .canvas-wrap::before, html[data-blur="1"] .sheet:not([data-reveal="1"]) .sheet-chart::before {
+            content: ""; position: absolute; left: 0; top: 0; bottom: var(--axb, 28px); width: var(--axl, 74px); z-index: 3; pointer-events: none;
+            -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+        html[data-blur="1"] .canvas-wrap[data-axr="1"]::after, html[data-blur="1"] .sheet:not([data-reveal="1"]) .sheet-chart[data-axr="1"]::after {
+            content: ""; position: absolute; right: 0; top: 0; bottom: var(--axb, 28px); width: var(--axr, 60px); z-index: 3; pointer-events: none;
+            -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+        /* Im Pop-up lassen sich die Werte per Auge-Knopf einblenden */
+        html[data-blur="1"] .sheet[data-reveal="1"] :is(.sens, .delta, .minis .v, .zrow .zv, .zrow .zw, .zrow .zs, .ruf-banner span) {
+            filter: none; -webkit-user-select: auto; user-select: auto; }
+        .top-actions, .head-actions { display: flex; gap: 8px; align-items: center; }
+        .eye-off { display: none; }
+        html[data-blur="1"] #blurBtn { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+        html[data-blur="1"] #blurBtn .eye-on, .sheet[data-reveal="1"] #sheetReveal .eye-off { display: none; }
+        html[data-blur="1"] #blurBtn .eye-off, .sheet[data-reveal="1"] #sheetReveal .eye-on { display: block; }
+        #sheetReveal { display: none; }
+        html[data-blur="1"] #sheetReveal { display: grid; }
+        .sheet[data-reveal="1"] #sheetReveal { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+        .loglist { list-style: none; margin: 10px 0 0; padding: 0; }
+        .loglist li { display: grid; gap: 2px; padding: 10px 0; border-top: 1px solid var(--line); font-size: .9rem; overflow-wrap: anywhere; }
+        .loglist li:first-child { border-top: 0; }
+        .log-time { color: var(--faint); font-size: .8rem; }
+    
+        /* ---------- Offline-App ---------- */
+        html { -webkit-text-size-adjust: 100%; }
+        .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; clip: rect(0 0 0 0); white-space: nowrap; }
+        #fehlerBox { position: fixed; left: 8px; right: 8px; top: 8px; z-index: 300; padding: 10px 12px; border-radius: 14px; background: #B3261E; color: #fff;
+                     font-size: .8rem; line-height: 1.4; word-break: break-word; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+        #fehlerBox[hidden] { display: none; }
+        #fehlerBox button { float: right; margin-left: 10px; border: 0; background: rgba(255,255,255,.2); color: #fff; border-radius: 8px; padding: 2px 8px; font: inherit; }
+        /* Ersatz für Browser ohne <dialog> (iOS vor 15.4) */
+        dialog.dlg-fallback { display: none; }
+        dialog.dlg-fallback[open] { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; margin: 0; box-shadow: 0 0 0 100vmax rgba(8, 16, 30, .55); }
+        @media (min-width: 760px) { dialog.dlg-fallback[open] { left: 50%; top: 50%; right: auto; bottom: auto; transform: translate(-50%, -50%); } }
+        .statusbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+                     max-width: min(92vw, 560px); padding: 10px 16px; border-radius: 999px; background: var(--ink); color: var(--bg); font-size: .9rem; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+        .statusbar[hidden] { display: none; }
+        .btn { font: inherit; }
+</style>
+</head>
+<body>
+    <header class="top">
+        <div class="top-in">
+            <div class="top-row">
+                <div class="brand">
+                    <svg width="26" height="16" viewBox="0 0 26 16" aria-hidden="true">
+                        <rect x="0" y="0" width="14" height="16" rx="5" fill="#14A38B"/>
+                        <rect x="16" y="0" width="6" height="16" rx="3" fill="#D6336C"/>
+                        <rect x="23.5" y="0" width="2.5" height="16" rx="1.25" fill="#E3A008"/>
+                    </svg>
+                    Entgelt
+                </div>
+                <div class="top-actions">
+                    <button class="icon-btn" id="blurBtn" type="button" aria-label="Werte verwischen" aria-pressed="false" title="Werte verwischen">
+                        <svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+                    </button>
+                    <button class="icon-btn" id="themeBtn" type="button" aria-label="Hell oder dunkel wechseln">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="chipsHost"></div>
+        </div>
+    </header>
+    <nav class="dock" aria-label="Ansichten">
+        <a href="#" data-nav="jahr"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg><span class="lbl">Jahr</span></a>
+        <a href="#" data-nav="verlauf"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5.5-6 4 4L21 6"/><path d="M15 6h6v6"/></svg><span class="lbl">Verlauf</span></a>
+        <a href="#" data-nav="vergleich"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V11M12 20V4M18 20v-6"/></svg><span class="lbl">Vergleich</span></a>
+        <a href="#" data-nav="daten"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span class="lbl">Daten</span></a>
+    </nav>
+    <div id="fehlerBox" hidden></div>
+<script>
+(function () {
+  function zeige(text) {
+    var b = document.getElementById('fehlerBox'); if (!b) return;
+    b.hidden = false; b.textContent = ''; var x = document.createElement('button'); x.textContent = 'OK'; x.onclick = function () { b.hidden = true; };
+    b.appendChild(x); b.appendChild(document.createTextNode(text + '  [' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 90) + ']'));
+  }
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t !== window && t.tagName === 'SCRIPT') { zeige('Konnte nicht geladen werden: ' + (t.src || '').slice(0, 80)); return; }
+    if (t && t !== window) return;
+    zeige((e.message || 'Fehler') + (e.lineno ? ' (Zeile ' + e.lineno + ')' : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) { zeige(String(e.reason && e.reason.message || e.reason)); });
+})();
+</script>
+    <noscript><div class="plate" style="margin:16px"><h2 class="sec-title">JavaScript ist aus</h2><p class="hint">Diese App braucht JavaScript. Öffne die Seite in Safari oder Chrome über einen Link, nicht aus der Dateivorschau, einer Mail oder einer Nachricht heraus.</p></div></noscript>
+    <main class="wrap" id="app"><div class="plate"><h2 class="sec-title">Wird geladen …</h2><p class="hint">Bleibt diese Meldung stehen, läuft die Seite nicht richtig: Öffne sie in Safari oder Chrome über einen Link (nicht aus der Dateivorschau, einer Mail oder einer Nachricht heraus) und achte auf eine Internetverbindung.</p></div></main>
+    <div id="dlgHost"></div>
+    <div id="statusBar" class="statusbar" hidden></div>
+    <input type="file" id="pdfInput" class="vh" accept="application/pdf,.pdf" multiple>
+<script>
+
+        // Falls die Diagramm-Bibliothek nicht ladbar ist (kein Internet), läuft die App ohne Diagramme weiter
+        if (!window.Chart) {
+            window.__keinChart = true;
+            window.Chart = function () { this.update = this.destroy = this.resize = function () {}; this.data = {datasets: []}; };
+            Chart.defaults = {font: {}, plugins: {legend: {labels: {}}, tooltip: {}}}; Chart.instances = {}; Chart.register = function () {};
+        }
+        // Dialog-Ersatz für ältere Browser (iOS vor 15.4 kennt <dialog> nicht)
+        (function () {
+            if (typeof HTMLDialogElement !== "undefined" && HTMLDialogElement.prototype.showModal) return;
+            window.__dialogErsatz = true;
+            var P = HTMLElement.prototype;
+            P.showModal = function () { this.setAttribute("open", ""); this.classList.add("dlg-fallback"); };
+            P.close = function () { if (!this.hasAttribute("open")) return; this.removeAttribute("open"); this.dispatchEvent(new Event("close")); };
+            Object.defineProperty(P, "open", { configurable: true, get: function () { return this.hasAttribute("open"); } });
+            document.addEventListener("keydown", function (e) { if (e.key === "Escape") { var d = document.querySelector("dialog.dlg-fallback[open]"); if (d) d.close(); } });
+        })();
+
+
+        const eur = v => v == null ? '–' : Number(v).toLocaleString('de-DE', {style: 'currency', currency: 'EUR'});
+        const pct = v => v == null ? '–' : Number(v).toLocaleString('de-DE', {maximumFractionDigits: 1}) + ' %';
+        const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+        const zahl1 = v => v == null ? '–' : Number(v).toLocaleString('de-DE', {maximumFractionDigits: 1});
+        const stunden = v => v == null ? '–' : zahl1(v) + ' h';
+
+        // Datenfarben: mittlere Töne, die auf hellem und dunklem Grund funktionieren
+        const C = {netto: '#14A38B', abzug: '#D6336C', brutto: '#4A5CF0', sonst: '#E3A008',
+                   zeit: '#8B5CF6', urlaub: '#0EA5E9', vj: '#64748B', tzug: '#F97316', leistung: '#F97316',
+                   rest: 'rgba(20,163,139,.42)', nacht: '#4F46E5', sonntag: '#F59E0B', gastro: '#E3A008', fahrrad: '#6366F1'};
+        const PALETTE = ['#4A5CF0', '#14A38B', '#E3A008', '#D6336C', '#8B5CF6', '#0EA5E9', '#F97316', '#64748B'];
+
+        // Gemeinsames Diagramm-Design (reagiert auf hell/dunkel)
+        function applyChartTheme() {
+            Chart.defaults.color = css('--muted');
+            Chart.defaults.borderColor = css('--line');
+            Chart.defaults.font.family = css('--font-body');
+            Chart.defaults.font.size = 12;
+            Chart.defaults.maintainAspectRatio = false;
+            Chart.defaults.responsive = true;
+            const L = Chart.defaults.plugins.legend;
+            L.align = 'start';
+            L.labels.usePointStyle = true;
+            L.labels.boxWidth = 8;
+            L.labels.boxHeight = 8;
+            L.labels.padding = 16;
+            Object.assign(Chart.defaults.plugins.tooltip, {
+                backgroundColor: css('--tip'), titleColor: '#FFFFFF', bodyColor: '#E8EEF7', footerColor: '#C3CFDF',
+                cornerRadius: 12, padding: 12, boxPadding: 5, usePointStyle: true
+            });
+        }
+        applyChartTheme();
+
+        const noBorder = {border: {display: false}};
+        const noGridX = {grid: {display: false}};
+        const line = (color, extra = {}) => ({borderColor: color, backgroundColor: color, borderWidth: 2.5, pointRadius: 0,
+                                              pointHoverRadius: 5, tension: .3, ...extra});
+        const ctx = id => { const e = document.getElementById(id); return e ? e.getContext('2d') : null; };
+        // Achse für Quoten eng um die Werte legen (sonst sieht man bei fast konstanten Werten nichts)
+        const zoomQuote = arr => {
+            const w = (arr || []).filter(v => v != null).sort((a, b) => a - b);
+            if (!w.length) return {};
+            const q = p => w[Math.min(w.length - 1, Math.floor(p * (w.length - 1)))];
+            const q1 = q(.25), q3 = q(.75), spanne = Math.max(q3 - q1, 1);
+            const ok = w.filter(v => v >= q1 - 3 * spanne && v <= q3 + 3 * spanne);   // extreme Ausreißer ausklammern
+            return {min: Math.floor(ok[0] - 1), max: Math.ceil(ok[ok.length - 1] + 1)};
+        };
+
+        // Werte verwischen (merkt sich die Einstellung)
+        const wurzel = document.documentElement;
+        const setzeBlur = an => {
+            wurzel.dataset.blur = an ? '1' : '0';
+            try { localStorage.setItem('blur', an ? '1' : '0'); } catch (e) {}
+            document.getElementById('blurBtn').setAttribute('aria-pressed', String(an));
+        };
+        document.getElementById('blurBtn').setAttribute('aria-pressed', String(wurzel.dataset.blur === '1'));
+        document.getElementById('blurBtn').addEventListener('click', () => setzeBlur(wurzel.dataset.blur !== '1'));
+
+        // Diagramme: Breite der Achsenbeschriftung messen, damit nur sie verwischt wird (rein lesend, schlägt nie fehl)
+        if (window.Chart && Chart.register) Chart.register({
+            id: 'achsenmass',
+            afterLayout(chart) {
+                try {
+                    const wrap = chart.canvas.parentElement, a = chart.chartArea;
+                    if (!wrap || !a) return;
+                    wrap.style.setProperty('--axl', Math.max(0, Math.round(a.left)) + 'px');
+                    wrap.style.setProperty('--axr', Math.max(0, Math.round(chart.width - a.right)) + 'px');
+                    wrap.style.setProperty('--axb', Math.max(0, Math.round(chart.height - a.bottom)) + 'px');
+                    wrap.dataset.axr = Object.values(chart.scales || {}).some(sc => sc.axis === 'y' && sc.position === 'right') ? '1' : '0';
+                } catch (e) {}
+            }
+        });
+
+        // Darstellung wechseln
+        document.getElementById('themeBtn').addEventListener('click', () => {
+            const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset.theme = next;
+            try { localStorage.setItem('theme', next); } catch (e) {}
+            const meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', css('--bg'));
+            applyChartTheme();
+            Object.values(Chart.instances).forEach(c => c.update());
+        });
+        (function () { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', css('--bg')); })();
+
+        // Vertikale Scrollposition beim Jahreswechsel merken
+        document.querySelectorAll('[data-keepscroll]').forEach(a =>
+            a.addEventListener('click', () => sessionStorage.setItem('scrollY', String(window.scrollY))));
+
+
+const DIALOG_HTML = "<dialog id=\"sheet\" class=\"sheet\" aria-labelledby=\"sheetTitel\">\n        <div class=\"sheet-in\">\n            <div class=\"sheet-grab\" aria-hidden=\"true\"></div>\n            <div class=\"sheet-head\">\n                <div>\n                    <h2 class=\"sec-title\" id=\"sheetTitel\"></h2>\n                    <p class=\"sec-sub\" id=\"sheetSub\" style=\"margin-bottom:0\"></p>\n                </div>\n                <div class=\"head-actions\">\n                    <button class=\"icon-btn\" type=\"button\" id=\"sheetReveal\" aria-label=\"Werte anzeigen\" aria-pressed=\"false\" title=\"Werte anzeigen\">\n                        <svg class=\"eye-on\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>\n                        <svg class=\"eye-off\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 3l18 18M10.6 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2\"/></svg>\n                    </button>\n                    <button class=\"icon-btn\" type=\"button\" id=\"sheetClose\" aria-label=\"Schließen\">\n                        <svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"/></svg>\n                    </button>\n                </div>\n            </div>\n            <div class=\"seg-tabs\" id=\"sheetTabs\" hidden></div>\n            <div class=\"sheet-chart\" id=\"sheetChartWrap\"><canvas id=\"sheetCanvas\"></canvas></div>\n            <p class=\"empty\" id=\"sheetLeer\" hidden>Für dieses Jahr liegen keine Monatswerte vor.</p>\n            <div class=\"minis\" id=\"sheetStats\"></div>\n            <div class=\"zlist\" id=\"sheetListe\" hidden></div>\n        </div>\n    </dialog>";
+/* ===== Auslesen der Abrechnung (Port von main.py). Reines JavaScript, ohne Abhängigkeiten. =====
+   Eingabe: Seiten als Wortlisten [x0, y0, x1, y1, text] (y von oben nach unten). */
+const MONATSNAMEN = {"Januar":"01","Februar":"02","März":"03","April":"04","Mai":"05","Juni":"06","Juli":"07","August":"08","September":"09","Oktober":"10","November":"11","Dezember":"12"};
+
+const BETRAG_TOKEN = /^(?:-?\d{1,3}(?:\.\d{3})*,\d{2}-?|-?\d+,\d{2}-?)$/;
+const ZAHL_TOKEN = /^(?:-?\d{1,3}(?:\.\d{3})*,\d{1,2}-?|-?\d+,\d{1,2}-?)$/;
+
+function runde(x, n) { const f = Math.pow(10, n === undefined ? 2 : n); return Math.round((x + Number.EPSILON) * f) / f; }
+function zahlDe(s) { return parseFloat(String(s).replace(",", ".")); }
+
+function parseBetrag(text) {
+  if (text === null || text === undefined) return null;
+  let t = String(text).trim();
+  const neg = t.startsWith("-") || t.endsWith("-");
+  t = t.replace(/^-+|-+$/g, "").replace(/\./g, "").replace(",", ".");
+  if (t === "" || !/^\d+(?:\.\d+)?$/.test(t)) return null;
+  const v = Number(t);
+  return neg ? -v : v;
+}
+
+function baueZeilen(woerter) {
+  const w = woerter.slice().sort((a, b) => ((a[1] + a[3]) / 2 - (b[1] + b[3]) / 2) || (a[0] - b[0]));
+  const zeilen = [];
+  for (const wort of w) {
+    const yc = (wort[1] + wort[3]) / 2;
+    const tol = 0.4 * (wort[3] - wort[1]);
+    if (zeilen.length && Math.abs(yc - zeilen[zeilen.length - 1].yc) <= tol) zeilen[zeilen.length - 1].words.push(wort);
+    else zeilen.push({ yc, words: [wort] });
+  }
+  for (const z of zeilen) z.words.sort((a, b) => a[0] - b[0]);
+  return zeilen;
+}
+
+function zeilentext(z) {
+  let text = ""; const spans = [];
+  for (const w of z.words) { const s = text.length; text += w[4]; spans.push({ s, e: text.length, w }); text += " "; }
+  return { text, spans };
+}
+
+function betraegeIn(woerter) {
+  const out = [];
+  for (let i = 0; i < woerter.length; i++) {
+    if (BETRAG_TOKEN.test(woerter[i][4])) {
+      let wert = parseBetrag(woerter[i][4]);
+      if (wert === null) continue;
+      const nxt = i + 1 < woerter.length ? woerter[i + 1][4] : "";
+      if (nxt === "-" && wert > 0) wert = -wert;
+      out.push(wert);
+    }
+  }
+  return out;
+}
+
+/* Suche mit RegExp ODER Funktion (für Muster mit Lookbehind, das ältere Safari-Versionen nicht kennen) */
+function suche(text, pat) {
+  if (typeof pat === "function") return pat(text);
+  const r = new RegExp(pat.source, pat.flags.replace("g", ""));
+  const m = r.exec(text);
+  return m ? { index: m.index, end: m.index + m[0].length } : null;
+}
+
+function wertRechtsVonLabel(zeilen, muster, modus) {
+  modus = modus || "letzter";
+  for (const z of zeilen) {
+    const { text, spans } = zeilentext(z);
+    const m = suche(text, muster);
+    if (!m) continue;
+    const rechts = spans.filter(sp => sp.s >= m.end).map(sp => sp.w);
+    const b = betraegeIn(rechts);
+    if (b.length) return modus === "letzter" ? b[b.length - 1] : b[0];
+  }
+  return null;
+}
+
+/* ---------- Urlaub ---------- */
+const URLAUB_LFD = /(?:rest-?\s*)?urlaub\s*:?\s*lfd/;
+const URLAUB_FREIST = /(?:rest-?\s*)?urlaub\s*\/\s*freist/;
+const URLAUB_VJ = [/(?:rest-?\s*)?urlaub\s*:?\s*(?:vorjahr|vj)(?![a-z])/, /(?:^|[^a-z])vj\s*-?\s*(?:rest-?\s*)?urlaub/, /vorjahres\s*-?\s*(?:rest-?\s*)?urlaub/];
+const URLAUB_FREI = /rest-?\s*frei/;
+const ZAHLENPAAR = /(\d+(?:,\d+)?)\s*\/\s*(\d+(?:,\d+)?)/;
+const EINZELZAHL = /(\d+(?:,\d+)?)/;
+
+function extrahiereUrlaub(zeilen) {
+  const res = { lfd: null, vj: null, tzug: null };
+  for (const z of zeilen) {
+    const text = zeilentext(z).text; const low = text.toLowerCase();
+    let m = suche(low, URLAUB_LFD);
+    if (m && res.lfd === null) {
+      const p = ZAHLENPAAR.exec(text.slice(m.end));
+      if (p) { res.lfd = zahlDe(p[1]); res.vj = zahlDe(p[2]); }
+      continue;
+    }
+    m = suche(low, URLAUB_FREIST);
+    if (m && res.lfd === null) {
+      const p = ZAHLENPAAR.exec(text.slice(m.end));
+      if (p) { res.lfd = zahlDe(p[1]); res.tzug = zahlDe(p[2]); }
+      continue;
+    }
+    if (res.vj === null) {
+      let mv = null;
+      for (const rx of URLAUB_VJ) { const mm = suche(low, rx); if (mm) { mv = mm; break; } }
+      if (mv) {
+        const e = EINZELZAHL.exec(text.slice(mv.end));
+        if (e) res.vj = zahlDe(e[1]);
+        continue;
+      }
+    }
+    m = suche(low, URLAUB_FREI);
+    if (m && res.tzug === null) {
+      const p = ZAHLENPAAR.exec(text.slice(m.end));
+      if (p) res.tzug = zahlDe(p[1]);
+    }
+  }
+  return res;
+}
+
+function extrahiereEntgeltgruppe(zeilen) {
+  for (const z of zeilen) {
+    const text = zeilentext(z).text;
+    const m = /entgeltgruppe/i.exec(text);
+    if (!m) continue;
+    let rest = text.slice(m.index + m[0].length);
+    rest = rest.split(/arbeitszeitkennzeichen|resturlaub|zeitkonto|sabbatical|gesamtbrutto|übersicht/i)[0];
+    rest = rest.replace(/^[ :]+|[ :]+$/g, "");
+    if (rest) return rest;
+  }
+  return null;
+}
+
+function extrahiereLeistung(zeilen) {
+  const werte = [];
+  for (const z of zeilen) {
+    const text = zeilentext(z).text;
+    const m = /leistungsentgelt/i.exec(text);
+    if (!m) continue;
+    const rest = text.slice(m.index + m[0].length);
+    for (const p of rest.matchAll(/(\d+(?:,\d+)?)\s*%/g)) werte.push(zahlDe(p[1]));
+  }
+  return werte.length ? Math.max(...werte) : null;
+}
+
+/* ---------- Ultimo / Rest ---------- */
+function ultimoMuster(text) {                 // 'ultimo' oder 'Überweisung zum' (nicht Teil von 'Restüberweisung zum')
+  const m1 = /ultimo/i.exec(text);
+  let m2 = null;
+  const rx = /überweisung\s+zum/gi; let mm;
+  while ((mm = rx.exec(text)) !== null) {
+    const prev = mm.index > 0 ? text[mm.index - 1] : "";
+    if (!(prev && /[a-zäöü\-]/i.test(prev))) { m2 = mm; break; }
+  }
+  const a = m1 ? { index: m1.index, end: m1.index + m1[0].length } : null;
+  const b = m2 ? { index: m2.index, end: m2.index + m2[0].length } : null;
+  if (a && b) return a.index <= b.index ? a : b;
+  return a || b;
+}
+const REST_MUSTER = /rest[\s\-]*(?:über|ueber)[\s\-]*weisung|nachzahlung|rest[\s\-]*zahlung/i;
+
+function extrahiereUeberweisungen(zeilen, netto) {
+  let start = 0;
+  for (let i = 0; i < zeilen.length; i++) {
+    if (/gesetzl(?:iches|\.)?\s*netto/i.test(zeilentext(zeilen[i]).text)) { start = i; break; }
+  }
+  const bereich = zeilen.slice(start);
+  let ultimo = wertRechtsVonLabel(bereich, ultimoMuster, "erster");
+  if (ultimo === null) ultimo = wertRechtsVonLabel(zeilen, ultimoMuster, "erster");
+  let rest = wertRechtsVonLabel(bereich, REST_MUSTER, "erster");
+  if (rest === null && ultimo !== null && netto !== null) rest = runde(netto - ultimo, 2);
+  return [ultimo, rest];
+}
+
+/* ---------- Sonstige Posten (Gastronomie, Fahrrad) ---------- */
+const SONSTIGE_POSTEN = { "Gastronomie (€)": /gastronomie/i, "Fahrrad (€)": /fahrrad/i };
+const SONSTIGE_ENDE = /^netto\b|überweisung\s+zum|ultimo|restzahlung|rest-?\s*überweisung|aufteilung\s+der\s+zeitzuschl/i;
+
+function extrahierePosten(zeilen) {
+  const summen = {}; for (const k of Object.keys(SONSTIGE_POSTEN)) summen[k] = null;
+  let start = null;
+  for (let i = 0; i < zeilen.length; i++) {
+    if (/^\s*sonstige\s+be-?\s*und\s+abzüge/i.test(zeilentext(zeilen[i]).text)) { start = i; break; }
+  }
+  if (start === null) return summen;
+  for (let i = start + 1; i < zeilen.length; i++) {
+    const { text, spans } = zeilentext(zeilen[i]);
+    if (SONSTIGE_ENDE.test(text)) break;
+    for (const [spalte, rx] of Object.entries(SONSTIGE_POSTEN)) {
+      const m = suche(text, rx);
+      if (!m) continue;
+      const b = betraegeIn(spans.filter(sp => sp.s >= m.end).map(sp => sp.w));
+      if (b.length) summen[spalte] = runde((summen[spalte] || 0) - b[b.length - 1], 2);
+    }
+  }
+  return summen;
+}
+
+function extrahiereFahrrad(zeilen) {
+  let ende = zeilen.length;
+  for (let i = 0; i < zeilen.length; i++) {
+    if (/^\s*gesamtbrutto/i.test(zeilentext(zeilen[i]).text)) { ende = i; break; }
+  }
+  const muster = { umw: /fahrrad[\s\-]*bruttoumwandlung|bruttoumwandlung[\s\-]*fahrrad/i, zus: /fahrrad[\s\-]*zuschuss|zuschuss[\s\-]*fahrrad/i, gwv: /gwv[\s\-]*fahrrad|fahrrad[\s\-]*gwv/i };
+  const summen = { umw: null, zus: null, gwv: null };
+  for (const z of zeilen.slice(0, ende)) {
+    const { text, spans } = zeilentext(z);
+    for (const [key, rx] of Object.entries(muster)) {
+      const m = suche(text, rx);
+      if (!m) continue;
+      const b = betraegeIn(spans.filter(sp => sp.s >= m.end).map(sp => sp.w));
+      if (!b.length) continue;
+      let v = b[b.length - 1];
+      if (key === "umw") v = Math.abs(v); else if (v <= 0) continue;
+      summen[key] = runde((summen[key] || 0) + v, 2);
+    }
+  }
+  return [summen.umw, summen.zus, summen.gwv];
+}
+
+/* ---------- Zeitzuschläge, Rufbereitschaft ---------- */
+function istSonntag(low) { return /sonn/.test(low) || /(?:^|[^a-zäöü])so\./.test(low); }
+const SONNTAG_NACHT = /dns|88\s*%/;
+const REFERENZ = /referenz\s+schicht/;
+const RUF = /ruf[\s\-]*bereitschaft/i;
+
+function extrahiereZuschlaege(zeilen) {
+  let kopf = null;
+  for (let i = 0; i < zeilen.length; i++) {
+    const { text, spans } = zeilentext(zeilen[i]);
+    const m = /aufteilung\s+der\s+zeitzuschl/i.exec(text);
+    if (m) {
+      const sp = spans.find(s => s.e > m.index);
+      kopf = [i, sp.w[0]]; break;
+    }
+  }
+  if (kopf === null) return [[], null, null, null];
+  const [i0, x0] = kopf;
+  const rows = []; let ohneZahl = 0;
+  for (const z of zeilen.slice(i0 + 1)) {
+    const woerter = z.words.filter(w => w[0] >= x0 - 8);
+    if (!woerter.length) continue;
+    const tokens = woerter.map(w => w[4]);
+    const zahlPos = []; tokens.forEach((t, k) => { if (ZAHL_TOKEN.test(t)) zahlPos.push(k); });
+    if (!zahlPos.length) {
+      if (rows.length) break;
+      ohneZahl += 1; if (ohneZahl > 4) break; continue;
+    }
+    const k = zahlPos[0];
+    const bez = tokens.slice(0, k).join(" ").trim();
+    if (!bez) { if (rows.length) break; continue; }
+    const werte = [];
+    for (const j of zahlPos) {
+      let v = parseBetrag(tokens[j]);
+      if (v !== null) { if (j + 1 < tokens.length && tokens[j + 1] === "-" && v > 0) v = -v; werte.push(v); }
+    }
+    rows.push({ b: bez, h: werte[0], w: werte.length > 1 ? werte[1] : null });
+  }
+  if (!rows.length) return [[], null, null, null];
+  let schicht = null, nacht = 0, mehr = 0;
+  for (const r of rows) {
+    const low = r.b.toLowerCase();
+    if (REFERENZ.test(low)) { if (schicht === null) schicht = r.h; }
+    else if (istSonntag(low) && !RUF.test(low)) { if (SONNTAG_NACHT.test(low)) nacht += r.h; else mehr += r.h; }
+  }
+  return [rows, schicht, runde(nacht, 2), runde(mehr, 2)];
+}
+
+function extrahiereRuf(zeilen) {
+  const out = [];
+  for (const z of zeilen) {
+    const { text, spans } = zeilentext(z);
+    const m = RUF.exec(text);
+    if (!m) continue;
+    const ende = m.index + m[0].length;
+    const zahlen = spans.filter(sp => sp.s >= ende && ZAHL_TOKEN.test(sp.w[4])).map(sp => parseBetrag(sp.w[4])).filter(v => v !== null);
+    if (zahlen.length) out.push({ z: text.slice(m.index).trim().slice(0, 160), w: zahlen[0] });
+  }
+  return out;
+}
+
+/* ---------- Ideenprämien: 'Ideenprämie 1' und der nächste Betrag ---------- */
+function extrahiereIdeen(zeilen) {
+  const werte = [];
+  let suchen = false;
+  for (const z of zeilen) {
+    const { text, spans } = zeilentext(z);
+    const low = text.toLowerCase();
+    const idx = low.indexOf("ideenprämie 1");
+    let start = 0;
+    if (idx >= 0) {
+      suchen = true; start = idx + "ideenprämie 1".length;       // Betrag kann in derselben Zeile rechts vom Label stehen
+    } else if (!suchen) continue;
+    const kandidaten = spans.filter(sp => sp.s >= start && sp.w[4].includes(","));
+    if (kandidaten.length) {
+      const wert = parseFloat(kandidaten[kandidaten.length - 1].w[4].replace(/\./g, "").replace(",", "."));
+      if (!isNaN(wert) && /^-?\d+(?:\.\d+)?$/.test(kandidaten[kandidaten.length - 1].w[4].replace(/\./g, "").replace(",", "."))) { werte.push(wert); suchen = false; }
+    }
+  }
+  return werte;
+}
+
+function erkenneMonat(zeilenErsteSeite) {
+  for (const z of zeilenErsteSeite) {
+    const text = z.words.map(w => w[4]).join(" ");
+    for (const [name, nr] of Object.entries(MONATSNAMEN)) {
+      if (text.includes(name)) {
+        const jahr = text.split(/\s+/).find(p => /^\d{4}$/.test(p));
+        if (jahr) return `${nr}.${jahr}`;
+        break;
+      }
+    }
+  }
+  return "";
+}
+
+const ABR_SUMME = ["Brutto (€)", "Netto (€)", "Gesetzl. Abzüge (€)", "Sonstige Abzüge (€)", "Ultimo (€)", "Rest (€)", "Gastronomie (€)", "Fahrrad (€)",
+  "Fahrrad Umwandlung (€)", "Fahrrad Zuschuss (€)", "Fahrrad GWV (€)", "Sonntag Nacht (h)", "Mehrarbeit Sonntag (h)", "Rufbereitschaft"];
+
+function extrahiereAbrechnung(seiten) {
+  const zeilen = [];
+  for (const s of seiten) zeilen.push(...baueZeilen(s));
+  const warnungen = [];
+  const brutto = wertRechtsVonLabel(zeilen, /gesamtbrutto/i);
+  const netto = wertRechtsVonLabel(zeilen, /auszahlungsbetrag/i);
+  const abzuege = wertRechtsVonLabel(zeilen, /gesetzliche\s+abzüge/i);
+  const sonstige = wertRechtsVonLabel(zeilen, /sonstige\s+be-?\s*und\s+abzüge/i);
+  if (brutto !== null && abzuege !== null && netto !== null && Math.abs(brutto + abzuege + (sonstige || 0) - netto) > 0.02)
+    warnungen.push("Brutto minus Abzüge minus Sonstige ergibt nicht den Auszahlungsbetrag");
+  const zeitkonto = wertRechtsVonLabel(zeilen, /zeitkonto/i, "erster");
+  const wochenstd = wertRechtsVonLabel(zeilen, /arbeitszeitkennzeichen/i, "erster");
+  const urlaub = extrahiereUrlaub(zeilen);
+  const [ultimo, rest] = extrahiereUeberweisungen(zeilen, netto);
+  const posten = extrahierePosten(zeilen);
+  const [zz, schichtH, sonntagNachtH, mehrSonntagH] = extrahiereZuschlaege(zeilen);
+  const [fUmw, fZus, fGwv] = extrahiereFahrrad(zeilen);
+  const ruf = extrahiereRuf(zeilen);
+  const erg = {
+    "Brutto (€)": brutto, "Netto (€)": netto,
+    "Gesetzl. Abzüge (€)": abzuege !== null ? runde(-abzuege, 2) : null,
+    "Sonstige Abzüge (€)": sonstige !== null ? runde(-sonstige, 2) : null,
+    "Ultimo (€)": ultimo, "Rest (€)": rest,
+    "Gastronomie (€)": posten["Gastronomie (€)"], "Fahrrad (€)": posten["Fahrrad (€)"],
+    "Fahrrad Umwandlung (€)": fUmw, "Fahrrad Zuschuss (€)": fZus, "Fahrrad GWV (€)": fGwv,
+    "Schichtdauer (h)": schichtH, "Sonntag Nacht (h)": sonntagNachtH, "Mehrarbeit Sonntag (h)": mehrSonntagH,
+    "Rufbereitschaft": ruf.length ? 1 : 0, "Rufbereitschaft (JSON)": ruf.length ? JSON.stringify(ruf) : null,
+    "Zuschläge (JSON)": zz.length ? JSON.stringify(zz) : null,
+    "Zeitkonto (h)": zeitkonto, "Resturlaub lfd. Jahr (Tage)": urlaub.lfd, "Resturlaub VJ (Tage)": urlaub.vj,
+    "Sonderurlaub T-Zug (Tage)": urlaub.tzug, "Wochenstunden": wochenstd,
+    "Leistung (%)": extrahiereLeistung(zeilen), "Entgeltgruppe": extrahiereEntgeltgruppe(zeilen),
+  };
+  return { erg, zeilen, warnungen };
+}
+
+/* Eine ganze PDF: Seiten (Wortlisten) -> Monat, Abrechnungswerte, Ideenprämien */
+function verarbeitePdf(seiten) {
+  if (!seiten.length) return { monat: "", abr: null, ideen: [], warnungen: ["Keine Seiten gefunden"] };
+  const ersteZeilen = baueZeilen(seiten[0]);
+  const monat = erkenneMonat(ersteZeilen);
+  const { erg, zeilen, warnungen } = extrahiereAbrechnung(seiten);
+  const ideen = extrahiereIdeen(zeilen);
+  return { monat, abr: erg, ideen, warnungen };
+}
+
+/* ===== Datenmodell der Offline-App: Monatszeilen, Kennzahlen, Zeitreihen (Port von app.py) ===== */
+const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+const NAECHTE_PRO_WOCHE = 6, SONNTAG_SCHICHT_H = 7.5, SCHICHT_RUNDUNG = 0.4;
+
+const nn = x => (x === null || x === undefined || Number.isNaN(x)) ? null : runde(x, 2);
+const ssum = arr => { const v = arr.filter(x => x != null); return v.length ? runde(v.reduce((a, b) => a + b, 0), 2) : null; };
+const mittel = arr => { const v = arr.filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const pctChange = (neu, alt) => (neu == null || !alt) ? null : runde((neu - alt) / alt * 100, 1);
+const quote = (teil, ganz) => (teil == null || !ganz) ? null : runde(teil / ganz * 100, 1);
+const deZahl = (x, n) => { n = n === undefined ? 2 : n; return Number(x).toLocaleString("de-DE", { minimumFractionDigits: n, maximumFractionDigits: n }); };
+const txtOrNull = x => { if (x === null || x === undefined) return null; const s = String(x).trim(); return s || null; };
+
+function zuschlagArt(b) {
+  const low = b.toLowerCase();
+  if (/referenz\s+schicht/.test(low)) return "referenz";
+  if (/ruf[\s\-]*bereitschaft/.test(low)) return "ruf";
+  if (istSonntag(low)) return /dns|88\s*%/.test(low) ? "sonntag_nacht" : "sonntag_mehr";
+  if (/nacht/.test(low)) return "nacht";
+  return "sonst";
+}
+function zaehleSchichten(stunden, laenge) {
+  if (stunden == null || Number.isNaN(stunden) || !laenge || laenge <= 0) return [null, null];
+  const n = Math.floor(stunden / laenge + SCHICHT_RUNDUNG);
+  const mehr = runde(stunden - n * laenge, 2);
+  return [n, mehr > 0.05 ? mehr : 0];
+}
+function zeileInfo(z) {
+  if (z.art === "nacht") return "wird nicht gezählt, nur Sonntage mit Nachtschicht zählen";
+  if (z.art === "sonntag_mehr") return "Mehrarbeit ohne Nachtschicht, zählt nicht als Nachtschichtwoche";
+  if (z.art === "sonntag_nacht") {
+    const [n, zusatz] = zaehleSchichten(z.h, SONNTAG_SCHICHT_H);
+    if (n === null) return null;
+    return `${n} ${n === 1 ? "Sonntag" : "Sonntage"} Nachtschicht` + (zusatz ? `, davon ca. ${deZahl(zusatz)} h zusätzlich` : "");
+  }
+  return null;
+}
+function parseJson(t) { if (!t) return []; try { const d = JSON.parse(t); return Array.isArray(d) ? d : []; } catch (e) { return []; } }
+function parseZuschlaege(t) {
+  return parseJson(t).filter(z => z && typeof z === "object" && "b" in z && z.h != null)
+    .map(z => ({ b: String(z.b), h: nn(z.h), w: z.w != null ? nn(z.w) : null, art: zuschlagArt(String(z.b)) }));
+}
+
+/* Eine Monatszeile aus den ausgelesenen Werten (e = {abr, ideen}) oder eine Lücke (e = null) */
+function baueZeile(key, e) {
+  const [mm, jj] = key.split(".");
+  const r = { key, j: +jj, m: +mm, real: !!e, abr: e ? (e.abr || {}) : {} };
+  const a = r.abr, g = k => (a[k] === undefined ? null : a[k]);
+  const ideen = e ? (e.ideen || []) : [];
+  r.summe = e ? ssum(ideen) || 0 : 0; r.anzahl = ideen.filter(v => v !== 0).length;
+  r.status = !e ? "DATEI FEHLT" : (r.summe === 0 ? "KEIN BONUS" : "OK");
+  r.brutto = g("Brutto (€)"); r.netto = g("Netto (€)"); r.abz = g("Gesetzl. Abzüge (€)"); r.sonst = g("Sonstige Abzüge (€)");
+  r.quote = (r.brutto != null && r.brutto > 0 && r.netto != null) ? r.netto / r.brutto * 100 : null;
+  r.ultimo = g("Ultimo (€)"); r.rest = g("Rest (€)"); r.gastro = g("Gastronomie (€)");
+  r.umw = g("Fahrrad Umwandlung (€)"); r.zus = g("Fahrrad Zuschuss (€)"); r.gwv = g("Fahrrad GWV (€)"); r.gwvNetto = g("Fahrrad (€)");
+  r.fahrrad = r.umw != null ? runde(r.umw - (r.zus || 0) - (r.gwv || 0) + (r.gwvNetto || 0), 2) : null;
+  r.zeitkonto = g("Zeitkonto (h)"); r.urlaub = g("Resturlaub lfd. Jahr (Tage)"); r.urlaubVj = g("Resturlaub VJ (Tage)");
+  r.tzug = g("Sonderurlaub T-Zug (Tage)"); r.leistung = g("Leistung (%)"); r.eg = txtOrNull(g("Entgeltgruppe"));
+  r.zeilen = parseZuschlaege(g("Zuschläge (JSON)"));
+  let nachtH, mehrH;
+  if (r.zeilen.length) {
+    nachtH = r.zeilen.filter(z => z.art === "sonntag_nacht").reduce((s, z) => s + z.h, 0);
+    mehrH = r.zeilen.filter(z => z.art === "sonntag_mehr").reduce((s, z) => s + z.h, 0);
+  } else { nachtH = g("Sonntag Nacht (h)"); mehrH = g("Mehrarbeit Sonntag (h)"); }
+  const [n, zusatz] = zaehleSchichten(nachtH, SONNTAG_SCHICHT_H);
+  r.nachtH = nachtH; r.mehrH = mehrH; r.sonntage = n; r.zusatz = zusatz; r.wochen = n; r.naechte = n === null ? null : n * NAECHTE_PRO_WOCHE;
+  r.rufZeilen = parseJson(g("Rufbereitschaft (JSON)")).filter(x => x && typeof x === "object").map(x => ({ z: String(x.z || ""), w: x.w != null ? nn(x.w) : null }));
+  r.ruf = (g("Rufbereitschaft") || 0) > 0 || r.zeilen.some(z => z.art === "ruf");
+  for (const z of r.zeilen) z.info = zeileInfo(z);
+  return r;
+}
+
+/* Alle Monate vom ersten bis zum letzten vorhandenen, Lücken als 'DATEI FEHLT' */
+function bauePortfolio(eintraege) {
+  const map = new Map();
+  for (const e of eintraege) if (e.monat && !map.has(e.monat)) map.set(e.monat, e);
+  const ord = k => { const [m, j] = k.split("."); return (+j) * 12 + (+m) - 1; };
+  const keys = [...map.keys()].sort((a, b) => ord(a) - ord(b));
+  if (!keys.length) return [];
+  const rows = [];
+  for (let o = ord(keys[0]); o <= ord(keys[keys.length - 1]); o++) {
+    const j = Math.floor(o / 12), m = o % 12 + 1, key = `${String(m).padStart(2, "0")}.${j}`;
+    rows.push(baueZeile(key, map.get(key) || null));
+  }
+  return rows;
+}
+const jahreAbsteigend = rows => [...new Set(rows.map(r => r.j))].sort((a, b) => b - a);
+const zeilenJahr = (rows, j) => rows.filter(r => r.j === j);
+
+/* ---------- Entwicklung Entgeltgruppe / Leistung (vereinfacht: einzelne Ausreißer zählen nicht) ---------- */
+function glaetteUndFuelle(arr) {
+  const a = arr.slice();
+  for (let i = 1; i < a.length - 1; i++)
+    if (a[i] != null && a[i - 1] != null && a[i + 1] != null && a[i - 1] === a[i + 1] && a[i] !== a[i - 1]) a[i] = a[i - 1];
+  let last = null; return a.map(v => { if (v != null) last = v; return last; });
+}
+function dauerLang(m) {
+  const y = Math.floor(m / 12), r = m % 12, t = [];
+  if (y) t.push(`${y} ${y === 1 ? "Jahr" : "Jahre"}`);
+  if (r || !y) t.push(`${r || 1} ${(r || 1) === 1 ? "Monat" : "Monate"}`);
+  return t.join(" und ");
+}
+function baueEntwicklung(rows) {
+  const egRoh = rows.map(r => r.real ? r.eg : null), lpRoh = rows.map(r => r.real ? r.leistung : null);
+  const eg = glaetteUndFuelle(egRoh), lp = glaetteUndFuelle(lpRoh);
+  const zahl = v => { const m = String(v).match(/\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(",", ".")) : NaN; };
+  const aenderungen = [];
+  for (let i = 1; i < rows.length; i++) {
+    for (const [name, arr, num] of [["eg", eg, zahl], ["lp", lp, Number]]) {
+      if (arr[i] != null && arr[i - 1] != null && arr[i] !== arr[i - 1] && num(arr[i]) > num(arr[i - 1]))
+        aenderungen.push({ j: rows[i].j, m: rows[i].m, text: name === "eg" ? `Entgeltgruppe von ${arr[i - 1]} auf ${arr[i]}` : `Leistung von ${deZahl(arr[i - 1], 0)} % auf ${deZahl(arr[i], 0)} %` });
+    }
+  }
+  return { rows, eg, lp, aenderungen };
+}
+function standAn(entw, key, pos) {
+  const arr = entw[key]; const v = arr[pos];
+  if (v == null) return null;
+  let k = pos; while (k > 0 && arr[k - 1] === v) k--;
+  const erst = arr.findIndex(x => x != null);
+  return { wert: v, seit: `${MON[entw.rows[k].m - 1]} ${entw.rows[k].j}`, dauer: dauerLang(pos - k + 1), mindestens: k === erst };
+}
+function erhoehungenJeJahr(entw) {
+  const out = {};
+  for (const a of entw.aenderungen) (out[a.j] = out[a.j] || []).push({ monat: `${MON[a.m - 1]} ${a.j}`, text: a.text });
+  return out;
+}
+
+/* ---------- Jahreskennzahlen ---------- */
+function kpiJahr(rows, jahr) {
+  const dj = zeilenJahr(rows, jahr);
+  const col = (z, k) => z.map(r => r[k]);
+  const brutto = ssum(col(dj, "brutto")), netto = ssum(col(dj, "netto"));
+  const abzuege = ssum(col(dj, "abz")), sonstige = ssum(col(dj, "sonst"));
+  const praemien = ssum(col(dj, "summe"));
+  const nMonate = dj.filter(r => r.netto != null).length;
+  const mitNetto = dj.filter(r => r.netto != null).map(r => r.m);
+  const vj = rows.filter(r => r.j === jahr - 1 && mitNetto.includes(r.m));
+  const egS = dj.map(r => r.eg).filter(x => x != null), lpS = dj.map(r => r.leistung).filter(x => x != null);
+  const ultS = dj.map(r => r.ultimo).filter(x => x != null), restS = dj.map(r => r.rest).filter(x => x != null);
+  const ultSchnitt = ultS.length ? nn(mittel(ultS)) : null;
+  const ultMonate = dj.filter(r => r.ultimo != null).map(r => r.m);
+  const ultVj = rows.filter(r => r.j === jahr - 1 && ultMonate.includes(r.m)).map(r => r.ultimo).filter(x => x != null);
+  const gastroS = dj.map(r => r.gastro).filter(x => x != null), fahrS = dj.map(r => r.fahrrad).filter(x => x != null);
+  const zkS = dj.map(r => r.zeitkonto).filter(x => x != null);
+  const zkVj = rows.filter(r => r.j === jahr - 1).map(r => r.zeitkonto).filter(x => x != null);
+  const zkBasis = zkVj.length ? zkVj[zkVj.length - 1] : (zkS.length > 1 ? zkS[0] : null);
+  const zkEnde = zkS.length ? nn(zkS[zkS.length - 1]) : null;
+  return {
+    jahr, brutto, netto, abzuege, sonstige, netto_quote: quote(netto, brutto),
+    praemien, praemien_anzahl: dj.reduce((s, r) => s + r.anzahl, 0), praemien_anteil: quote(praemien, brutto),
+    netto_schnitt: netto != null && nMonate ? runde(netto / nMonate, 2) : null,
+    delta_netto: pctChange(netto, ssum(vj.map(r => r.netto))), monate: nMonate,
+    eg: egS.length ? egS[egS.length - 1] : null, eg_erste: egS.length ? egS[0] : null, eg_wechsel: new Set(egS).size > 1,
+    leistung: lpS.length ? nn(lpS[lpS.length - 1]) : null, leistung_wechsel: new Set(lpS).size > 1,
+    gastro_summe: ssum(dj.map(r => r.gastro)), gastro_schnitt: gastroS.length ? nn(mittel(gastroS)) : null,
+    fahrrad_summe: ssum(dj.map(r => r.fahrrad)), fahrrad_schnitt: fahrS.length ? nn(mittel(fahrS)) : null,
+    ultimo_schnitt: ultSchnitt, ultimo_delta: ultVj.length ? pctChange(ultSchnitt, nn(mittel(ultVj))) : null,
+    rest_summe: ssum(dj.map(r => r.rest)), rest_schnitt: restS.length ? nn(mittel(restS)) : null,
+    zk_ende: zkEnde, zk_vj: zkVj.length > 0, zk_delta: zkEnde != null && zkBasis != null ? nn(zkEnde - zkBasis) : null,
+  };
+}
+
+/* ---------- Daten für Diagramme und Pop-ups ---------- */
+function zwoelfMonate(rows, jahr) {
+  const d = {}; for (const r of rows) if (r.j === jahr) d[r.m] = r;
+  const reihe = (f, ohneFehlt) => { const out = []; for (let m = 1; m <= 12; m++) { const r = d[m]; out.push(!r || (ohneFehlt && r.status === "DATEI FEHLT") ? null : nn(f(r))); } return out; };
+  return {
+    brutto: reihe(r => r.brutto), netto: reihe(r => r.netto), netto_quote: reihe(r => r.quote), ideen: reihe(r => r.summe, true), anzahl: reihe(r => r.anzahl, true),
+    leistung: reihe(r => r.leistung), zeitkonto: reihe(r => r.zeitkonto), ultimo: reihe(r => r.ultimo), rest: reihe(r => r.rest),
+    gastro: reihe(r => r.gastro), fahrrad: reihe(r => r.fahrrad), wochen: reihe(r => r.wochen), naechte: reihe(r => r.naechte),
+    sonntage: reihe(r => r.sonntage), mehr_so: reihe(r => r.mehrH),
+  };
+}
+function fahrradTeile(rows, jahr) {
+  const d = zeilenJahr(rows, jahr);
+  const t = { umwandlung: ssum(d.map(r => r.umw)), zuschuss: ssum(d.map(r => r.zus)), gwv: ssum(d.map(r => r.gwv)), gwv_netto: ssum(d.map(r => r.gwvNetto)) };
+  return t.umwandlung !== null ? t : null;
+}
+function baueDrill(rows, jahr, jahre) {
+  return { jahr, vj_jahr: jahre.includes(jahr - 1) ? jahr - 1 : null, monate: MON, werte: zwoelfMonate(rows, jahr), vj: jahre.includes(jahr - 1) ? zwoelfMonate(rows, jahr - 1) : null, fahrrad_teile: fahrradTeile(rows, jahr) };
+}
+function baueChart(rows, jahr) {
+  const d = zeilenJahr(rows, jahr).slice().sort((a, b) => a.m - b.m);
+  const f = k => d.map(r => nn(r[k]));
+  return { labels: d.map(r => r.key), brutto: f("brutto"), netto: f("netto"), abzuege: f("abz"), sonstige: f("sonst"), netto_quote: f("quote"),
+    praemien: f("summe"), zeitkonto: f("zeitkonto"), urlaub: f("urlaub"), tzug: f("tzug"), urlaub_vj: f("urlaubVj") };
+}
+function baueSchicht(rows, jahr) {
+  const d = {}; for (const r of rows) if (r.j === jahr) d[r.m] = r;
+  const leer = () => ({ sonntag_h: null, mehr_h: null, sonntage: null, wochen: null, naechte: null, zusatz: null, zeilen: [], ruf: false, ruf_zeilen: [], alpha: 0 });
+  const monate = [];
+  for (let m = 1; m <= 12; m++) {
+    const r = d[m];
+    if (!r) { monate.push(leer()); continue; }
+    const rufInListe = r.zeilen.some(z => z.art === "ruf");
+    monate.push({ sonntag_h: nn(r.nachtH), mehr_h: nn(r.mehrH), sonntage: r.sonntage, wochen: r.wochen, naechte: r.naechte, zusatz: nn(r.zusatz),
+      zeilen: r.zeilen, ruf: r.ruf, ruf_zeilen: rufInListe ? [] : r.rufZeilen, alpha: 0 });
+  }
+  const mit = monate.filter(x => x.sonntage !== null || x.mehr_h !== null);
+  const groesst = Math.max(0, ...monate.map(x => x.sonntage || 0));
+  for (const x of monate) x.alpha = groesst && x.sonntage ? runde(0.14 + 0.62 * x.sonntage / groesst, 2) : 0;
+  const sum = k => monate.reduce((s, x) => s + (x[k] || 0), 0);
+  return {
+    hat: mit.length > 0 || monate.some(x => x.ruf), monate, monatsnamen: MON, jahr, ruf_monate: monate.filter(x => x.ruf).length,
+    wochen: Math.trunc(sum("wochen")), sonntage: Math.trunc(sum("sonntage")), naechte: Math.trunc(sum("naechte")),
+    sonntag_h: runde(sum("sonntag_h"), 2), zusatz_h: runde(sum("zusatz"), 2), mehr_h: runde(sum("mehr_h"), 2),
+    mehr_monate: monate.filter(x => (x.mehr_h || 0) > 0).length, wochen_monate: monate.filter(x => (x.wochen || 0) > 0).length, monate_mit_daten: mit.length,
+    naechte_pro_woche: NAECHTE_PRO_WOCHE, sonntag_schicht_h: SONNTAG_SCHICHT_H,
+  };
+}
+function baueSchichtJahre(rows) {
+  const d = rows.filter(r => r.wochen != null || r.mehrH != null);
+  if (!d.length) return null;
+  const jahre = [...new Set(d.map(r => r.j))].map(j => {
+    const g = d.filter(r => r.j === j); const w = g.reduce((s, r) => s + (r.wochen || 0), 0);
+    return { jahr: j, wochen: w, naechte: w * NAECHTE_PRO_WOCHE, mehr_h: runde(g.reduce((s, r) => s + (r.mehrH || 0), 0), 2), monate: g.length };
+  }).sort((a, b) => b.jahr - a.jahr);
+  const w = jahre.reduce((s, x) => s + x.wochen, 0);
+  return { jahre, naechte_pro_woche: NAECHTE_PRO_WOCHE, gesamt: { wochen: w, naechte: w * NAECHTE_PRO_WOCHE, mehr_h: runde(jahre.reduce((s, x) => s + x.mehr_h, 0), 2), seit: jahre[jahre.length - 1].jahr, monate: jahre.reduce((s, x) => s + x.monate, 0) } };
+}
+
+/* ---------- Verlauf ---------- */
+function rollend(arr, n, minP) {
+  return arr.map((_, i) => { const w = arr.slice(Math.max(0, i - n + 1), i + 1).filter(x => x != null); return w.length >= minP ? w.reduce((a, b) => a + b, 0) / w.length : null; });
+}
+function baueVerlauf(rows) {
+  const real = rows.filter(r => r.status !== "DATEI FEHLT");
+  if (!real.length) return null;
+  const dfa = rows;
+  const f = k => dfa.map(r => nn(r[k]));
+  const nettoAvg = rollend(dfa.map(r => r.netto), 12, 6), ultAvg = rollend(dfa.map(r => r.ultimo), 12, 6);
+  const zk = dfa.map(r => r.zeitkonto); const zkDelta = zk.map((v, i) => (i && v != null && zk[i - 1] != null) ? v - zk[i - 1] : null);
+  const verlauf = {
+    labels: dfa.map(r => `${MON[r.m - 1]} ${String(r.j).slice(2)}`),
+    brutto: f("brutto"), netto: f("netto"), netto_avg: nettoAvg.map(nn), ultimo: f("ultimo"), rest: f("rest"), ultimo_avg: ultAvg.map(nn),
+    wochen: f("wochen"), mehr_so: f("mehrH"), gastro: f("gastro"), fahrrad: f("fahrrad"), zeitkonto: f("zeitkonto"), zk_delta: zkDelta.map(nn),
+    netto_quote: f("quote"), ideen: dfa.map(r => r.status === "DATEI FEHLT" ? null : nn(r.summe)), leistung: f("leistung"),
+    urlaub: f("urlaub"), urlaub_vj: f("urlaubVj"), tzug: f("tzug"), eg: dfa.map(r => r.eg),
+  };
+  const zkS = zk.filter(x => x != null), nett = dfa.map(r => r.netto).filter(x => x != null), brut = dfa.map(r => r.brutto).filter(x => x != null);
+  const ult = dfa.map(r => r.ultimo).filter(x => x != null);
+  const tail = (a, n) => a.slice(-n), mid = a => a.slice(-24, -12);
+  const u12 = ult.length ? nn(mittel(tail(ult, 12))) : null, uVor = ult.length >= 24 ? nn(mittel(mid(ult))) : null;
+  const n12 = nett.length ? nn(mittel(tail(nett, 12))) : null, nVor = nett.length >= 24 ? nn(mittel(mid(nett))) : null;
+  const entw = baueEntwicklung(dfa);
+  const pos = dfa.length - 1;
+  const egS = standAn(entw, "eg", pos), lpS = standAn(entw, "lp", pos);
+  const kpi = {
+    zk_aktuell: zkS.length ? nn(zkS[zkS.length - 1]) : null, zk_delta_vm: zkS.length > 1 ? nn(zkS[zkS.length - 1] - zkS[zkS.length - 2]) : null,
+    netto_12: n12, netto_delta: pctChange(n12, nVor), brutto_12: brut.length ? nn(mittel(tail(brut, 12))) : null,
+    hat_ultimo: ult.length > 0, ultimo_12: u12, ultimo_delta: pctChange(u12, uVor),
+    hat_schicht: dfa.some(r => r.wochen != null || r.mehrH != null), hat_posten: dfa.some(r => r.gastro != null || r.fahrrad != null),
+    anzahl_monate: real.length,
+    eg: egS ? egS.wert : null, eg_seit: egS ? egS.seit : null, eg_dauer: egS ? egS.dauer : null, eg_min: egS ? egS.mindestens : false,
+    leistung: lpS ? nn(lpS.wert) : null, leistung_seit: lpS ? lpS.seit : null, leistung_dauer: lpS ? lpS.dauer : null, leistung_min: lpS ? lpS.mindestens : false,
+  };
+  return { verlauf, kpi, entw };
+}
+
+/* ---------- Vergleich ---------- */
+const METRIKEN = {
+  netto: ["Netto", r => r.netto, "eur"], brutto: ["Brutto", r => r.brutto, "eur"], abzuege: ["Gesetzl. Abzüge", r => r.abz, "eur"],
+  ideen: ["Ideenprämien", r => r.status === "DATEI FEHLT" ? null : r.summe, "eur"], netto_quote: ["Netto-Quote", r => r.quote, "pct"],
+  ultimo: ["Ultimo (Grundlohn)", r => r.ultimo, "eur"], rest: ["Rest und Nachzahlung", r => r.rest, "eur"],
+  leistung: ["Leistungsprozente", r => r.leistung, "pct"], zeitkonto: ["Zeitkonto", r => r.zeitkonto, "h"],
+  mehr_so: ["Mehrarbeit Sonntag", r => r.mehrH, "h"], sonntage_nacht: ["Sonntage Nachtschicht", r => r.sonntage, "n"],
+  nachtwochen: ["Nachtschichtwochen", r => r.wochen, "n"], naechte: ["Nächte", r => r.naechte, "n"],
+  gastro: ["Gastronomie", r => r.gastro, "eur"], fahrrad: ["Fahrrad (Kosten)", r => r.fahrrad, "eur"],
+};
+const METRIK_GRUPPEN = [["Entgelt", ["netto", "brutto", "abzuege", "ideen", "netto_quote", "ultimo", "rest"]], ["Stufe und Zeitkonto", ["leistung", "zeitkonto"]],
+  ["Mehrarbeit", ["mehr_so", "sonntage_nacht", "nachtwochen", "naechte"]], ["Eigene Kosten", ["gastro", "fahrrad"]]];
+
+function baueVergleich(rows, jahreAlle, args) {
+  const sel = [...new Set((args.jahre || []).filter(j => jahreAlle.includes(j)))].sort((a, b) => a - b);
+  const monateSel = [...new Set((args.monate || []).filter(m => m >= 1 && m <= 12))].sort((a, b) => a - b);
+  const metrik = METRIKEN[args.kennzahl] ? args.kennzahl : "netto";
+  const gleich = args.gleich !== false;
+  const [label, fn, typ] = METRIKEN[metrik];
+  const idx = {}; for (const r of rows) idx[r.j + "-" + r.m] = r;
+  const vorhanden = new Set(rows.filter(r => r.status !== "DATEI FEHLT").map(r => r.j + "-" + r.m));
+  const basis = monateSel.length ? monateSel : Array.from({ length: 12 }, (_, i) => i + 1);
+  const monate = !sel.length ? [] : gleich ? basis.filter(m => sel.every(j => vorhanden.has(j + "-" + m))) : basis.filter(m => sel.some(j => vorhanden.has(j + "-" + m)));
+  const wert = (j, m) => { const r = idx[j + "-" + m]; return r ? nn(fn(r)) : null; };
+  const serien = sel.map(j => {
+    const werte = monate.map(m => wert(j, m)); let s = 0; const kum = werte.map(v => v === null ? null : (s += v, runde(s, 2)));
+    return { jahr: j, werte, kum };
+  });
+  const zusammen = []; let vorher = null;
+  for (const j of sel) {
+    const teil = rows.filter(r => r.j === j && monate.includes(r.m));
+    const b = ssum(teil.map(r => r.brutto)), n = ssum(teil.map(r => r.netto)), ab = ssum(teil.map(r => r.abz)), so = ssum(teil.map(r => r.sonst));
+    const ideen = ssum(teil.map(r => r.status === "DATEI FEHLT" ? null : r.summe));
+    const row = { jahr: j, monate: teil.filter(r => r.status !== "DATEI FEHLT").length, brutto: b, netto: n, abzuege: ab, sonstige: so, netto_quote: quote(n, b),
+      ideen, anzahl: teil.reduce((s, r) => s + r.anzahl, 0), d_netto: vorher ? pctChange(n, vorher.netto) : null, d_ideen: vorher ? pctChange(ideen, vorher.ideen) : null };
+    zusammen.push(row); vorher = row;
+  }
+  const matrix = monate.map((m, i) => {
+    const werte = serien.map(s => s.werte[i]); let delta = null;
+    if (sel.length > 1 && werte[0] !== null && werte[werte.length - 1] !== null)
+      delta = typ === "pct" ? runde(werte[werte.length - 1] - werte[0], 1) : pctChange(werte[werte.length - 1], werte[0]);
+    return { monat: MON[m - 1], werte, delta };
+  });
+  return { sel, monate_sel: monateSel, monate, monate_labels: monate.map(m => MON[m - 1]), metrik, label, typ, gleich, hoch_ist_gut: metrik !== "abzuege",
+    kumuliert: ["eur", "h", "n"].includes(typ) && metrik !== "zeitkonto", serien, zusammen, matrix };
+}
+
+/* ===== Ansichten der Offline-App: erzeugen das Markup des Dashboards (Port der Jinja-Vorlage) ===== */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const sens = t => `<span class="sens">${t}</span>`;
+const fEur = v => v == null ? "–" : sens(esc(deZahl(v, 2) + " €"));
+const fPct = v => v == null ? "–" : sens(esc(deZahl(v, 1) + " %"));
+const fZahl = v => v == null ? "–" : sens(esc(deZahl(v, 2)));
+const fSch = v => { if (v == null) return "–"; let t = deZahl(v, 1); if (t.endsWith(",0")) t = t.slice(0, -2); return sens(esc(t)); };
+const big = v => { const s = v == null ? "–" : deZahl(v, 2) + " €"; const i = s.indexOf(","); return `<span class="sens">${esc(i < 0 ? s : s.slice(0, i))}${i < 0 ? "" : `<span class="cents">${esc(s.slice(i))}</span>`}</span>`; };
+const delta = (d, gutHoch, einheit, suffix) => d == null ? '<span class="faint">–</span>'
+  : `<span class="delta ${((d >= 0) === gutHoch) ? "up" : "down"}">${d >= 0 ? "▲" : "▼"} ${esc(deZahl(Math.abs(d), 1))} ${einheit}${suffix || ""}</span>`;
+const peek = () => '<svg class="peek" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 20V12M12 20V5M18 20v-6"/></svg>';
+const wecker = g => `<svg class="wecker" width="${g || 14}" height="${g || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.4 1.6M5 4.5L3 6.5M19 4.5l2 2"/></svg>`;
+const plural = (n, e, m) => n === 1 ? e : m;
+const seitBlock = (info, zusatz) => info
+  ? `<span class="s">Unverändert seit ${info.mindestens ? "mindestens " : ""}${esc(info.seit)}</span><span class="pill">${esc(info.dauer)}</span>${zusatz ? `<span class="s" style="margin-top:6px">${esc(zusatz)}</span>` : ""}`
+  : '<span class="s">Noch nicht eingelesen</span>';
+const kachel = (drill, k, v, s, extra) => `<button type="button" class="stat stat-btn" data-drill="${drill}" aria-haspopup="dialog"><span class="k">${k}</span><span class="v">${v}</span>${s || ""}${extra || ""}${peek()}</button>`;
+
+function htmlJahr(c) {
+  const { kpi, stand, schicht, schichtJahre } = c; const b = kpi.brutto;
+  const erJahr = c.erhoehungen[kpi.jahr];
+  let h = "";
+  /* --- Kopf: Netto ausgezahlt und Aufteilung --- */
+  h += `<section class="slip"><div class="slip-top"><div class="slip-head"><h1 class="year">${kpi.jahr}</h1><span class="pill">${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")} mit Daten</span></div>
+    <div class="hero-label">Netto ausgezahlt</div>
+    <button type="button" class="hero-num hero-btn" data-drill="netto" aria-haspopup="dialog" aria-label="Netto pro Monat als Diagramm öffnen"><span>${big(kpi.netto)}</span>${peek()}</button>
+    <div class="hero-sub"><span>Ø ${fEur(kpi.netto_schnitt)} pro Monat</span>${kpi.delta_netto != null ? delta(kpi.delta_netto, true, "%", " ggü. Vorjahr") : ""}</div>
+    ${erJahr ? `<div class="chipline" style="margin-top:12px">${erJahr.map(e => `<span class="delta up">▲ ${esc(e.monat)}: ${esc(e.text)}</span>`).join("")}</div>` : ""}
+    </div><div class="perf"></div><div class="slip-bottom">`;
+  if (b) {
+    const pn = (kpi.netto || 0) / b * 100, pa = (kpi.abzuege || 0) / b * 100, ps = (kpi.sonstige || 0) / b * 100, pr = Math.max(0, 100 - pn - pa - ps);
+    const p1 = x => esc(deZahl(x, 1));
+    h += `<div class="hero-label" style="margin-top:0">Wohin das Brutto von ${fEur(b)} fließt</div>
+      <div class="split reveal" role="img" aria-label="Aufteilung des Brutto in Netto, gesetzliche Abzüge und sonstige Abzüge"><span class="seg netto" style="flex: ${pn} 1 0"></span>${pa > 0 ? `<span class="seg abzug" style="flex: ${pa} 1 0"></span>` : ""}${ps > 0 ? `<span class="seg sonst" style="flex: ${ps} 1 0"></span>` : ""}${pr > 0.5 ? `<span class="seg rest" style="flex: ${pr} 1 0"></span>` : ""}</div>
+      <ul class="legend"><li><span class="k"><i style="background:var(--netto)"></i>Netto</span><span class="v">${fEur(kpi.netto)}</span><span class="p">${p1(pn)} % vom Brutto</span></li>
+      <li><span class="k"><i style="background:var(--abzug)"></i>Gesetzl. Abzüge</span><span class="v">${fEur(kpi.abzuege)}</span><span class="p">${p1(pa)} % vom Brutto</span></li>
+      ${ps > 0 ? `<li><span class="k"><i style="background:var(--sonst)"></i>Sonstige Abzüge</span><span class="v">${fEur(kpi.sonstige)}</span><span class="p">${p1(ps)} % vom Brutto</span></li>` : ""}
+      ${pr > 0.5 ? `<li><span class="k"><i style="background:var(--faint)"></i>Ohne Abzugsdaten</span><span class="v">–</span><span class="p">${p1(pr)} % noch nicht eingelesen</span></li>` : ""}</ul>`;
+  } else h += `<p class="empty" style="margin:0">Für ${kpi.jahr} liegen noch keine Brutto-Werte vor.</p>`;
+  h += `</div></section>`;
+  /* --- Gruppe Entgelt --- */
+  h += `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats">`;
+  h += kachel("brutto", "Brutto pro Monat", b && kpi.monate ? big(b / kpi.monate) : "–", `<span class="s">Durchschnitt über ${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")}</span>`);
+  h += kachel("netto_quote", "Netto-Quote", fPct(kpi.netto_quote), '<span class="s">Netto im Verhältnis zum Brutto</span>');
+  h += kachel("ideen", "Ideenprämien", big(kpi.praemien), `<span class="s">${kpi.praemien_anzahl} ${plural(kpi.praemien_anzahl, "Vorschlag", "Vorschläge")}, ${fPct(kpi.praemien_anteil)} vom Brutto</span>`);
+  if (kpi.ultimo_schnitt != null) {
+    h += kachel("ultimo", "Ultimo pro Monat", big(kpi.ultimo_schnitt), '<span class="s">Überweisung zum Monatsende</span>', kpi.ultimo_delta != null ? `<span class="s" style="margin-top:6px">${delta(kpi.ultimo_delta, true, "%", " ggü. Vorjahr")}</span>` : "");
+    h += kachel("rest", "Rest und Nachzahlung", big(kpi.rest_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.rest_schnitt)} pro Monat</span>`);
+  }
+  h += `</div></section>`;
+  /* --- Gruppe Stufe und Zeitkonto --- */
+  h += `<section class="group"><h2 class="group-title">Stufe und Zeitkonto</h2><div class="stats">
+    <div class="stat"><span class="k">Entgeltgruppe</span><span class="v">${esc(stand.eg ? stand.eg.wert : (kpi.eg || "–"))}</span>${seitBlock(stand.eg, kpi.eg_wechsel ? "Wechsel im Jahr, zuvor " + kpi.eg_erste : "")}</div>
+    <button type="button" class="stat stat-btn" data-drill="leistung" aria-haspopup="dialog"><span class="k">Leistungsprozente</span><span class="v">${fPct(stand.lp ? stand.lp.wert : kpi.leistung)}</span>${seitBlock(stand.lp, kpi.leistung_wechsel ? "Im Jahr geändert" : "")}${peek()}</button>
+    <button type="button" class="stat stat-btn" data-drill="zeitkonto" aria-haspopup="dialog"><span class="k">Zeitkonto am Jahresende</span><span class="v">${kpi.zk_ende != null ? sens(esc(deZahl(kpi.zk_ende)) + " h") : "–"}</span>
+      ${kpi.zk_delta != null ? `<span class="s">${kpi.zk_vj ? "Seit Jahresbeginn" : "Seit dem ersten Monat mit Daten"}</span><span class="pill" style="margin-top:6px">${kpi.zk_delta >= 0 ? "+" : "–"}${esc(deZahl(Math.abs(kpi.zk_delta)))} h</span>` : '<span class="s">Keine Veränderung berechenbar</span>'}${peek()}</button></div></section>`;
+  /* --- Gruppe Mehrarbeit --- */
+  if (schicht.hat) {
+    const mm = schicht.monate_mit_daten, mon = plural(mm, "Monat", "Monaten");
+    h += `<section class="group"><h2 class="group-title">Mehrarbeit</h2><div class="plate">
+      <p class="sec-sub">Nachtschichtwochen zählen nur Sonntage mit Nachtschicht (Mehrarbeit So. 88 % DNS). Jeder dieser Sonntage steht für eine Woche mit ${schicht.naechte_pro_woche} Nächten (Sonntag bis Samstag), eine Sonntagsschicht rechnet mit ${fSch(schicht.sonntag_schicht_h)} Stunden. Mehrarbeit an Sonntagen ohne Nachtschicht (50 %, 80 %) steht getrennt daneben.</p>
+      <div class="stats auto">
+        ${kachel("mehr_so", "Mehrarbeit Sonntag", `${fZahl(schicht.mehr_h)}<span class="cents"> Std.</span>`, `<span class="s">Ohne Nachtschicht, in ${schicht.mehr_monate} von ${mm} ${mon}</span>`)}
+        ${kachel("sonntage", "Sonntage Nachtschicht", `${schicht.sonntage}<span class="cents"> Sonntage</span>`, `<span class="s">${fZahl(schicht.sonntag_h)} Std.${schicht.zusatz_h ? `, davon ca. ${fZahl(schicht.zusatz_h)} h zusätzlich` : ""}</span>`)}
+        ${kachel("wochen", "Nachtschicht&shy;wochen", `${schicht.wochen}<span class="cents"> Wochen</span>`, `<span class="s">${schicht.naechte} Nächte in ${schicht.wochen_monate} von ${mm} ${mon}</span>`)}
+      </div><div class="mstrip" role="group" aria-label="Nachtschichtwochen je Monat">`;
+    schicht.monate.forEach((m, i) => {
+      h += `<button type="button" class="mcell${m.alpha > 0.5 ? " dunkel" : ""}" style="--a: ${m.alpha}" data-zmonat="${i}" ${(m.zeilen.length || m.ruf) ? "" : "disabled"}
+        aria-label="${MON[i]}: ${m.wochen != null ? deZahl(m.wochen, 0) + " Nachtschichtwochen" : "keine Angaben"}${m.ruf ? ", Rufbereitschaft" : ""}">
+        ${m.ruf ? `<span class="wbadge" title="Rufbereitschaft">${wecker(12)}</span>` : ""}<span class="mn">${MON[i]}</span><span class="mv">${fSch(m.wochen)}</span></button>`;
+    });
+    h += `</div><p class="hint">Die Zahl zeigt die Nachtschichtwochen im Monat, also die Sonntage mit Nachtschicht.${schicht.ruf_monate ? ` Der rote Wecker steht für Rufbereitschaft (${schicht.ruf_monate} ${plural(schicht.ruf_monate, "Monat", "Monate")}).` : ""} Tippe auf einen Monat für die Details.</p>
+      <div class="canvas-wrap" style="margin-top:14px"><canvas id="cSchicht"></canvas></div></div></section>`;
+  }
+  /* --- Gruppe Eigene Kosten --- */
+  if (kpi.gastro_summe != null || kpi.fahrrad_summe != null) {
+    h += `<section class="group"><h2 class="group-title">Eigene Kosten</h2><div class="stats">`;
+    if (kpi.gastro_summe != null) h += kachel("gastro", "Gastronomie", big(kpi.gastro_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.gastro_schnitt)} pro Monat</span>`);
+    if (kpi.fahrrad_summe != null) h += kachel("fahrrad", "Fahrrad, Kosten", big(kpi.fahrrad_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.fahrrad_schnitt)} pro Monat</span>`);
+    h += `</div></section>`;
+  }
+  /* --- Diagramme --- */
+  h += `<div class="grid2" style="margin-top:28px">
+    <section class="plate span2"><h2 class="sec-title">Aufteilung pro Monat</h2><p class="sec-sub">Netto, gesetzliche Abzüge und Sonstiges ergeben zusammen das Brutto.</p><div class="canvas-wrap tall"><canvas id="cAufteilung"></canvas></div></section>
+    <section class="plate"><h2 class="sec-title">Netto-Quote</h2><p class="sec-sub">Anteil des Netto am Brutto je Monat. Die Achse ist auf den üblichen Wertebereich zugeschnitten, extreme Ausreißer liegen außerhalb.</p><div class="canvas-wrap"><canvas id="cQuoten"></canvas></div></section>
+    <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="cPraemien"></canvas></div></section>
+    <section class="plate span2"><h2 class="sec-title">Zeitkonto, Resturlaub und Sonderurlaub</h2><p class="sec-sub">Zeitkonto in Stunden (links), Urlaubstage (rechts). Gestrichelt: Resturlaub aus dem Vorjahr.</p><div class="canvas-wrap"><canvas id="cZeit"></canvas></div></section></div>`;
+  /* --- Tabelle --- */
+  h += `<h2 class="sec-title section-gap" style="margin-bottom:12px">Monate im Detail</h2><div class="table-wrap"><table><thead><tr><th>Monat</th><th class="num">Brutto</th><th class="num">Netto</th><th class="num">Abzüge</th><th class="num">Netto-Quote</th><th class="num">Ideen</th><th class="num">Anzahl</th><th>EG</th><th class="num">Leistung</th><th class="num">Zeitkonto</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>`;
+  for (const r of c.monatsZeilen) {
+    const st = r.status === "OK" ? '<span class="st ok">OK</span>' : r.status === "KEIN BONUS" ? '<span class="st null">Kein Bonus</span>' : '<span class="st fehlt">Datei fehlt</span>';
+    h += `<tr class="${r.status === "DATEI FEHLT" ? "fehlt" : ""}"><td>${r.key}${r.ruf ? ` <span title="Rufbereitschaft">${wecker(13)}</span>` : ""}</td><td class="num">${fEur(r.brutto)}</td><td class="num">${fEur(r.netto)}</td><td class="num">${fEur(r.abz)}</td><td class="num">${fPct(r.quote)}</td><td class="num">${fZahl(r.summe)}</td><td class="num">${r.anzahl}</td><td class="sens">${esc(r.eg || "–")}</td><td class="num">${fPct(r.leistung)}</td><td class="num">${fZahl(r.zeitkonto)}</td><td>${st}</td><td>${r.warn ? `<span class="warnchip">${esc(r.warn)}</span>` : ""}</td></tr>`;
+  }
+  h += `</tbody></table></div><p class="foot">Ideenprogramm über alle geladenen Monate: ${c.gesamtVorschlaege} ${plural(c.gesamtVorschlaege, "Vorschlag", "Vorschläge")}, ${fEur(c.gesamtPraemien)}. Alle Werte stammen aus deinen PDFs und liegen nur in diesem Browserfenster.</p>`;
+  return h;
+}
+
+function htmlVerlauf(c) {
+  const vk = c.vk, sj = c.schichtJahre;
+  const karte = (k, v, s, pill) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${pill || ""}</div>`;
+  let h = `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats auto">
+    ${karte("Netto, Ø letzte 12 Monate", big(vk.netto_12), `Zu den 12 Monaten davor ${delta(vk.netto_delta, true, "%")}`)}
+    ${vk.hat_ultimo ? karte("Ultimo, Ø letzte 12 Monate", big(vk.ultimo_12), `Zu den 12 Monaten davor ${delta(vk.ultimo_delta, true, "%")}`) : ""}
+    ${karte("Brutto, Ø letzte 12 Monate", big(vk.brutto_12), `${vk.anzahl_monate} Monate mit Daten insgesamt`)}</div>
+    <div class="grid2">
+    <section class="plate span2"><h2 class="sec-title" id="bnTitel">Brutto und Netto</h2>
+      ${vk.hat_ultimo ? `<div class="seg-tabs" role="group" aria-label="Ansicht wählen"><button type="button" data-bn="bn" aria-pressed="true">Brutto und Netto</button><button type="button" data-bn="ur" aria-pressed="false">Ultimo und Rest</button></div>` : ""}
+      <p class="sec-sub" id="bnSub">Die gestrichelte Linie zeigt das Netto als Durchschnitt der letzten 12 Monate.</p>
+      <div class="canvas-wrap tall" id="bnWrap"><canvas id="hBN"></canvas></div><div class="canvas-wrap tall" id="urWrap" hidden><canvas id="hUR"></canvas></div></section>
+    <section class="plate"><h2 class="sec-title">Netto-Quote</h2><p class="sec-sub">Anteil des Netto am Brutto. Die Achse ist auf den üblichen Wertebereich zugeschnitten.</p><div class="canvas-wrap"><canvas id="hQ"></canvas></div></section>
+    <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="hI"></canvas></div></section></div></section>
+  <section class="group"><h2 class="group-title">Stufe und Zeitkonto</h2><div class="stats auto">
+    ${karte("Zeitkonto aktuell", vk.zk_aktuell != null ? sens(esc(deZahl(vk.zk_aktuell)) + " h") : "–", `Zum Vormonat ${delta(vk.zk_delta_vm, true, "h")}`)}
+    ${karte("Entgeltgruppe aktuell", esc(vk.eg || "–"), vk.eg_seit ? `Unverändert seit ${vk.eg_min ? "mindestens " : ""}${esc(vk.eg_seit)}` : "Noch nicht eingelesen", vk.eg_dauer ? `<span class="pill">${esc(vk.eg_dauer)}</span>` : "")}
+    ${karte("Leistungsprozente aktuell", fPct(vk.leistung), vk.leistung_seit ? `Unverändert seit ${vk.leistung_min ? "mindestens " : ""}${esc(vk.leistung_seit)}` : "Noch nicht eingelesen", vk.leistung_dauer ? `<span class="pill">${esc(vk.leistung_dauer)}</span>` : "")}</div>
+    <div class="grid2">
+    <section class="plate span2"><h2 class="sec-title">Leistungsprozente</h2><p class="sec-sub">Stufen der Leistungsbeurteilung. Beim Antippen eines Monats steht die Entgeltgruppe im Tooltip.</p><div class="canvas-wrap"><canvas id="hL"></canvas></div></section>
+    <section class="plate span2"><h2 class="sec-title">Zeitkonto</h2><p class="sec-sub">Stand (Linie, links) und Veränderung zum Vormonat (Balken, rechts).</p><div class="canvas-wrap"><canvas id="hZK"></canvas></div></section>
+    <section class="plate span2"><h2 class="sec-title">Urlaubstage</h2><p class="sec-sub">Resturlaub laufendes Jahr, Vorjahr (gestrichelt) und Sonderurlaub T-Zug.</p><div class="canvas-wrap"><canvas id="hU"></canvas></div></section></div></section>`;
+  if (vk.hat_schicht || sj) {
+    h += `<section class="group"><h2 class="group-title">Mehrarbeit</h2>${sj ? `<div class="stats auto">
+      ${karte("Nachtschichtwochen insgesamt", `${sj.gesamt.wochen}<span class="cents"> Wochen</span>`, `${sj.gesamt.naechte} Nächte seit ${sj.gesamt.seit}`)}
+      ${karte("Mehrarbeit Sonntag insgesamt", `${fZahl(sj.gesamt.mehr_h)}<span class="cents"> Std.</span>`, `Ohne Nachtschicht, seit ${sj.gesamt.seit}`)}</div>` : ""}<div class="grid2">`;
+    if (vk.hat_schicht) h += `<section class="plate span2"><h2 class="sec-title">Nachtschichtwochen</h2><p class="sec-sub">Pro Monat, gezählt nach den Sonntagen mit Nachtschicht (Mehrarbeit So. 88 % DNS).</p><div class="canvas-wrap"><canvas id="hNS"></canvas></div></section>
+      <section class="plate span2"><h2 class="sec-title">Mehrarbeit Sonntag</h2><p class="sec-sub">Stunden pro Monat an Sonntagen ohne Nachtschicht.</p><div class="canvas-wrap"><canvas id="hMS"></canvas></div></section>`;
+    if (sj) h += `<section class="plate span2"><h2 class="sec-title">Je Jahr</h2><p class="sec-sub">Eine Nachtschichtwoche hat ${sj.naechte_pro_woche} Nächte (Sonntag bis Samstag).</p><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Nachtschichtwochen</th><th class="num">Nächte</th><th class="num">Mehrarbeit Sonntag</th></tr></thead><tbody>
+      ${sj.jahre.map(j => `<tr><td>${j.jahr}</td><td class="num">${j.wochen}</td><td class="num">${j.naechte}</td><td class="num">${fZahl(j.mehr_h)} h</td></tr>`).join("")}
+      <tr class="summe"><td>Gesamt</td><td class="num">${sj.gesamt.wochen}</td><td class="num">${sj.gesamt.naechte}</td><td class="num">${fZahl(sj.gesamt.mehr_h)} h</td></tr></tbody></table></div></section>`;
+    h += `</div></section>`;
+  }
+  if (vk.hat_posten) h += `<section class="group"><h2 class="group-title">Eigene Kosten</h2><div class="grid2"><section class="plate span2"><h2 class="sec-title">Gastronomie und Fahrrad</h2><p class="sec-sub">Abzüge aus „Sonstige Be- und Abzüge“ und Fahrradkosten pro Monat.</p><div class="canvas-wrap"><canvas id="hGF"></canvas></div></section></div></section>`;
+  return h + `<p class="foot">Monate ohne Abrechnung werden in den Linien überbrückt.</p>`;
+}
+
+function htmlVergleich(c) {
+  const v = c.v, jahre = c.jahreAsc;
+  let h = `<h1 class="page-title">Vergleich</h1><p class="lede">Jahre und einzelne Monate nebeneinander stellen.</p>
+  <form id="vgForm" class="plate filter"><div><p class="grp-title">Jahre</p><div class="togs">${jahre.map(j => `<label class="tog"><input type="checkbox" name="jahre" value="${j}" ${v.sel.includes(j) ? "checked" : ""}><span>${j}</span></label>`).join("")}</div></div>
+  <div><p class="grp-title">Monate <span class="faint" style="font-weight:400">(nichts gewählt zeigt alle)</span></p><div class="togs">${MON.map((n, i) => `<label class="tog"><input type="checkbox" name="monate" value="${i + 1}" ${v.monate_sel.includes(i + 1) ? "checked" : ""}><span>${n}</span></label>`).join("")}</div></div>
+  <div class="row-opts"><label>Kennzahl <select name="kennzahl" style="margin-left:8px">${METRIK_GRUPPEN.map(([g, keys]) => `<optgroup label="${g}">${keys.map(k => `<option value="${k}" ${k === v.metrik ? "selected" : ""}>${METRIKEN[k][0]}</option>`).join("")}</optgroup>`).join("")}</select></label>
+  <label class="check"><input type="checkbox" name="gleich" value="1" ${v.gleich ? "checked" : ""}> Nur Monate, die in allen gewählten Jahren vorhanden sind</label></div>
+  <button class="btn" type="submit">Vergleichen</button></form>`;
+  if (!v.sel.length) return h + '<div class="plate empty">Bitte mindestens ein Jahr auswählen.</div>';
+  if (!v.monate.length) return h + '<div class="plate empty">Für diese Auswahl gibt es keine gemeinsamen Monate mit Daten. Wähle andere Monate oder schalte die Option „Nur Monate, die in allen gewählten Jahren vorhanden sind“ aus.</div>';
+  const fmtW = w => v.typ === "pct" ? fPct(w) : v.typ === "h" ? (w == null ? "–" : fZahl(w) + " h") : v.typ === "n" ? fSch(w) : fEur(w);
+  h += `<p class="hint" style="margin:0 0 14px">Verglichen werden ${v.monate_labels.join(", ")} in ${v.sel.join(", ")}.</p>
+  <h2 class="sec-title" style="margin-bottom:12px">Je Jahr über die verglichenen Monate</h2><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Monate</th><th class="num">Brutto</th><th class="num">Netto</th><th class="num">Abzüge</th><th class="num">Sonstige</th><th class="num">Netto-Quote</th><th class="num">Ideen</th><th class="num">Anzahl</th><th class="num">Δ Netto</th><th class="num">Δ Ideen</th></tr></thead><tbody>
+  ${v.zusammen.map(z => `<tr><td>${z.jahr}</td><td class="num">${z.monate}</td><td class="num">${fEur(z.brutto)}</td><td class="num">${fEur(z.netto)}</td><td class="num">${fEur(z.abzuege)}</td><td class="num">${fEur(z.sonstige)}</td><td class="num">${fPct(z.netto_quote)}</td><td class="num">${fEur(z.ideen)}</td><td class="num">${z.anzahl}</td><td class="num">${delta(z.d_netto, true, "%")}</td><td class="num">${delta(z.d_ideen, true, "%")}</td></tr>`).join("")}</tbody></table></div>
+  <p class="hint">Δ zeigt die Veränderung gegenüber dem vorherigen gewählten Jahr.</p>
+  <div class="grid2"><section class="plate span2"><h2 class="sec-title">${v.label} pro Monat</h2><p class="sec-sub">Eine Farbe je Jahr.</p><div class="canvas-wrap tall"><canvas id="cVergleich"></canvas></div></section>
+  ${v.kumuliert ? `<section class="plate span2"><h2 class="sec-title">${v.label} kumuliert</h2><p class="sec-sub">Aufsummiert über die verglichenen Monate.</p><div class="canvas-wrap"><canvas id="cKumuliert"></canvas></div></section>` : ""}</div>
+  <h2 class="sec-title section-gap" style="margin-bottom:12px">${v.label} nach Monat und Jahr</h2><div class="table-wrap"><table><thead><tr><th>Monat</th>${v.serien.map(s => `<th class="num">${s.jahr}</th>`).join("")}${v.sel.length > 1 ? `<th class="num">Δ ${v.sel[0]} bis ${v.sel[v.sel.length - 1]}</th>` : ""}</tr></thead><tbody>
+  ${v.matrix.map(r => `<tr><td>${r.monat}</td>${r.werte.map(w => `<td class="num">${fmtW(w)}</td>`).join("")}${v.sel.length > 1 ? `<td class="num">${delta(r.delta, v.hoch_ist_gut, v.typ === "pct" ? "PP" : "%")}</td>` : ""}</tr>`).join("")}</tbody></table></div>${v.typ === "pct" ? '<p class="hint">PP steht für Prozentpunkte.</p>' : ""}`;
+  return h;
+}
+
+function htmlStart() {
+  return `<section class="slip"><div class="slip-top"><div class="slip-head"><h1 class="year">Entgelt</h1><span class="pill">Offline-App</span></div>
+    <p class="lede" style="margin:10px 0 18px">Lies deine Entgeltabrechnungen (PDF) ein und sieh Netto, Abzüge, Zeitkonto, Mehrarbeit und mehr übersichtlich ausgewertet.</p>
+    <label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">PDF-Abrechnungen auswählen</label>
+    <button type="button" class="btn" id="demoBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Demo mit Beispieldaten</button>
+    <p class="hint" style="margin-top:14px">Du kannst mehrere PDFs auf einmal auswählen, am besten alle Monate eines Zeitraums.</p></div>
+    <div class="perf"></div><div class="slip-bottom"><div class="hero-label" style="margin-top:0">Deine Daten bleiben bei dir</div>
+    <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Es wird nichts gespeichert. Wenn du die Seite schließt, sind die Daten weg.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li></ul></div></section>
+    <p class="foot">Für die PDF-Auswertung und die Diagramme lädt die Seite zwei Bibliotheken aus dem Internet nach.</p>
+    <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
+}
+
+function htmlDaten(c) {
+  const monate = c.rows.filter(r => r.real).map(r => r.key), luecken = c.rows.filter(r => !r.real).map(r => r.key);
+  return `<h1 class="page-title">Daten</h1><p class="lede">${monate.length} ${plural(monate.length, "Monat", "Monate")} geladen${monate.length ? ` (${monate[0]} bis ${monate[monate.length - 1]})` : ""}.</p>
+  <div class="plate"><label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">Weitere PDFs hinzufügen</label>
+  <button type="button" class="btn" id="loeschBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Alle Daten löschen</button>
+  <p class="hint" style="margin-top:12px">Alles liegt nur im Arbeitsspeicher dieses Fensters. Beim Schließen oder Neuladen der Seite sind die Daten weg.</p></div>
+  ${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
+  <h2 class="sec-title section-gap" style="margin-bottom:8px">Hinweise beim Einlesen</h2>
+  <div class="plate">${c.hinweise.length ? `<ul class="loglist">${c.hinweise.map(t => `<li><span>${esc(t)}</span></li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Keine Auffälligkeiten.</p>'}</div>
+  <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
+}
+
+const WECKER_SVG = wecker(18);
+function initJahr(D, M, S, WECKER) {
+
+
+        new Chart(ctx('cAufteilung'), {
+            type: 'bar',
+            data: {labels: D.labels, datasets: [
+                {label: 'Netto', data: D.netto, backgroundColor: C.netto, borderRadius: 5},
+                {label: 'Gesetzl. Abzüge', data: D.abzuege, backgroundColor: C.abzug, borderRadius: 5},
+                {label: 'Sonstige Abzüge', data: D.sonstige, backgroundColor: C.sonst, borderRadius: 5}
+            ]},
+            options: {
+                scales: {x: {stacked: true, ...noGridX}, y: {stacked: true, ...noBorder, ticks: {callback: v => eur(v)}}},
+                plugins: {tooltip: {callbacks: {
+                    label: c => c.dataset.label + ': ' + eur(c.parsed.y),
+                    footer: items => 'Brutto: ' + eur(D.brutto[items[0].dataIndex])
+                }}}
+            }
+        });
+
+        new Chart(ctx('cQuoten'), {
+            type: 'line',
+            data: {labels: D.labels, datasets: [{label: 'Netto-Quote', data: D.netto_quote, ...line(C.netto)}]},
+            options: {interaction: {mode: 'index', intersect: false},
+                      scales: {y: {...noBorder, ...zoomQuote(D.netto_quote), ticks: {callback: v => v + ' %'}}, x: noGridX},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => 'Netto-Quote: ' + pct(c.parsed.y)}}}}
+        });
+
+        new Chart(ctx('cPraemien'), {
+            type: 'bar',
+            data: {labels: D.labels, datasets: [{label: 'Ideenprämien', data: D.praemien, backgroundColor: C.brutto, borderRadius: 6}]},
+            options: {scales: {y: {beginAtZero: true, ...noBorder, ticks: {callback: v => eur(v)}}, x: noGridX},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => eur(c.parsed.y)}}}}
+        });
+
+        new Chart(ctx('cZeit'), {
+            type: 'line',
+            data: {labels: D.labels, datasets: [
+                {label: 'Zeitkonto (h)', data: D.zeitkonto, yAxisID: 'y', ...line(C.zeit)},
+                {label: 'Resturlaub lfd. Jahr (Tage)', data: D.urlaub, yAxisID: 'y1', ...line(C.urlaub)},
+                {label: 'Resturlaub Vorjahr (Tage)', data: D.urlaub_vj, yAxisID: 'y1', ...line(C.vj, {borderDash: [6, 5]})},
+                {label: 'Sonderurlaub T-Zug (Tage)', data: D.tzug, yAxisID: 'y1', ...line(C.tzug)}
+            ]},
+            options: {interaction: {mode: 'index', intersect: false}, scales: {
+                y: {position: 'left', ...noBorder},
+                y1: {position: 'right', ...noBorder, grid: {drawOnChartArea: false}},
+                x: noGridX}}
+        });
+
+        const sheet = document.getElementById('sheet');
+        let sheetChart = null;
+        // Im Verwischen-Modus: Werte im Pop-up zunächst verwischt (false) oder sofort sichtbar (true)
+        const POPUP_WERTE_STANDARD = false;
+        const setzeAnzeige = an => {
+            sheet.dataset.reveal = an ? '1' : '0';
+            const knopf = document.getElementById('sheetReveal');
+            knopf.setAttribute('aria-pressed', String(an));
+            knopf.setAttribute('aria-label', an ? 'Werte verwischen' : 'Werte anzeigen');
+            knopf.title = an ? 'Werte verwischen' : 'Werte anzeigen';
+        };
+        document.getElementById('sheetReveal').addEventListener('click', () => setzeAnzeige(sheet.dataset.reveal !== '1'));
+        const DRILL = {
+            netto:       {titel: 'Netto pro Monat',             typ: 'bar',  fmt: eur,     farbe: C.netto},
+            brutto:      {titel: 'Brutto pro Monat',            typ: 'bar',  fmt: eur,     farbe: C.brutto},
+            netto_quote: {titel: 'Netto-Quote pro Monat',       typ: 'line', fmt: pct,     farbe: C.netto,    zoom: true},
+            ideen:       {titel: 'Ideenprämien pro Monat',      typ: 'bar',  fmt: eur,     farbe: C.brutto,   ideen: true},
+            leistung:    {titel: 'Leistungsprozente pro Monat', typ: 'line', fmt: pct,     farbe: C.leistung, zoom: true, stepped: true},
+            zeitkonto:   {titel: 'Zeitkonto pro Monat',         typ: 'line', fmt: stunden, farbe: C.zeit},
+            ultimo:      {titel: 'Ultimo pro Monat',            typ: 'bar',  fmt: eur,     farbe: C.netto},
+            rest:        {titel: 'Rest und Nachzahlung pro Monat', typ: 'bar', fmt: eur,  farbe: C.rest},
+            gastro:      {titel: 'Gastronomie pro Monat',       typ: 'bar',  fmt: eur,     farbe: C.gastro},
+            fahrrad:     {titel: 'Fahrrad, Kosten pro Monat',   typ: 'bar',  fmt: eur,     farbe: C.fahrrad},
+            wochen:      {titel: 'Nachtschichtwochen pro Monat',     typ: 'bar',  fmt: zahl1,   farbe: C.nacht},
+            sonntage:    {titel: 'Sonntage Nachtschicht pro Monat',  typ: 'bar',  fmt: zahl1,   farbe: C.nacht},
+            naechte:     {titel: 'Nächte pro Monat',                 typ: 'bar',  fmt: zahl1,   farbe: C.nacht},
+            mehr_so:     {titel: 'Mehrarbeit Sonntag pro Monat',     typ: 'bar',  fmt: stunden, farbe: C.sonntag}
+        };
+
+        function oeffneSheet(key, variante) {
+            const cfg = DRILL[key];
+            if (!cfg) return;
+            variante = variante || 'normal';
+            document.getElementById('sheetListe').hidden = true;
+            const teil = key === 'netto' && variante === 'teil';                       // Ultimo und Rest übereinander
+            const hatTeile = key === 'netto' && M.werte.ultimo.some(v => v != null);
+
+            // Untermenü (nur beim Netto und nur, wenn Ultimo-Werte vorliegen)
+            const tabs = document.getElementById('sheetTabs');
+            tabs.replaceChildren();
+            tabs.hidden = !hatTeile;
+            if (hatTeile) {
+                [['normal', 'Netto'], ['teil', 'Ultimo und Rest']].forEach(([v, text]) => {
+                    const b = document.createElement('button');
+                    b.type = 'button'; b.textContent = text; b.setAttribute('aria-pressed', String(v === variante));
+                    b.addEventListener('click', () => oeffneSheet('netto', v));
+                    tabs.append(b);
+                });
+            }
+
+            let titel, sub, mitWert, stats = [], datasets, typ = cfg.typ, optionen;
+            if (teil) {
+                const u = M.werte.ultimo, r = M.werte.rest;
+                mitWert = M.monate.map((m, i) => ({m: m, u: u[i], r: r[i]})).filter(x => x.u != null || x.r != null);
+                const sU = mitWert.reduce((a, x) => a + (x.u || 0), 0), sR = mitWert.reduce((a, x) => a + (x.r || 0), 0);
+                titel = 'Ultimo und Rest pro Monat ' + M.jahr;
+                sub = 'Ultimo plus Rest und Nachzahlung ergeben das Netto.';
+                if (mitWert.length) stats = [['Ultimo, Durchschnitt', eur(sU / mitWert.length)], ['Rest und Nachzahlung, Summe', eur(sR)],
+                                             ['Rest-Anteil am Netto', (sU + sR) ? pct(sR / (sU + sR) * 100) : '–']];
+                typ = 'bar';
+                datasets = [{label: 'Ultimo', data: u, backgroundColor: C.netto, borderRadius: 5},
+                            {label: 'Rest und Nachzahlung', data: r, backgroundColor: C.rest, borderRadius: 5}];
+                optionen = {
+                    interaction: {mode: 'index', intersect: false},
+                    scales: {x: {stacked: true, ...noGridX}, y: {stacked: true, ...noBorder, ticks: {callback: v => eur(v)}}},
+                    plugins: {legend: {display: true}, tooltip: {callbacks: {
+                        label: c => c.dataset.label + ': ' + eur(c.parsed.y),
+                        footer: items => 'Zusammen: ' + eur(items.reduce((a, it) => a + (it.parsed.y || 0), 0))
+                    }}}
+                };
+            } else {
+                const jahr = M.werte[key], vj = M.vj ? M.vj[key] : null;
+                const hatVj = !!(vj && vj.some(v => v != null));
+                titel = cfg.titel + ' ' + M.jahr;
+                sub = hatVj ? 'Farbig: ' + M.jahr + '. Grau: ' + M.vj_jahr + ' zum Vergleich.' : 'Die einzelnen Monate von ' + M.jahr + '.';
+                mitWert = jahr.map((v, i) => ({v: v, m: M.monate[i]})).filter(x => x.v != null);
+                if (mitWert.length) {
+                    const summe = mitWert.reduce((a, x) => a + x.v, 0);
+                    const hoch = mitWert.reduce((a, x) => x.v > a.v ? x : a), tief = mitWert.reduce((a, x) => x.v < a.v ? x : a);
+                    if (cfg.ideen) {
+                        stats = [['Summe', cfg.fmt(summe)]];
+                        if (hoch.v > 0) stats.push(['Bester Monat', hoch.m + ' (' + cfg.fmt(hoch.v) + ')']);
+                        stats.push(['Monate mit Prämie', String(mitWert.filter(x => x.v > 0).length)]);
+                    } else if (hoch.v === tief.v) {
+                        stats = [['Durchschnitt', cfg.fmt(summe / mitWert.length)], ['Verlauf', 'In allen Monaten gleich']];
+                    } else {
+                        stats = [['Durchschnitt', cfg.fmt(summe / mitWert.length)], ['Höchster Monat', hoch.m + ' (' + cfg.fmt(hoch.v) + ')'],
+                                 ['Niedrigster Monat', tief.m + ' (' + cfg.fmt(tief.v) + ')']];
+                    }
+                }
+                if (key === 'fahrrad' && M.fahrrad_teile) {
+                    const t = M.fahrrad_teile;
+                    sub = 'Kosten = Bruttoumwandlung minus Zuschuss minus GWV plus GWV-Abzug vom Netto.' + (hatVj ? ' Grau: ' + M.vj_jahr + '.' : '');
+                    stats = stats.concat([['Bruttoumwandlung im Jahr', eur(t.umwandlung)], ['Zuschuss im Jahr', eur(t.zuschuss)],
+                                          ['GWV im Jahr (brutto / Netto-Abzug)', eur(t.gwv) + ' / ' + eur(t.gwv_netto)]]);
+                }
+                const reihe = (label, werte, istVj) => cfg.typ === 'bar'
+                    ? {label: label, data: werte, backgroundColor: istVj ? 'rgba(135,148,165,.5)' : cfg.farbe, borderRadius: 6}
+                    : {label: label, data: werte, spanGaps: true, stepped: !!cfg.stepped,
+                       ...line(istVj ? 'rgba(135,148,165,.9)' : cfg.farbe, istVj ? {borderDash: [6, 5], borderWidth: 2} : {pointRadius: 3})};
+                datasets = [];
+                if (hatVj) datasets.push(reihe(String(M.vj_jahr), vj, true));
+                datasets.push(reihe(String(M.jahr), jahr, false));
+                const alle = jahr.concat(vj || []);
+                optionen = {
+                    interaction: {mode: 'index', intersect: false},
+                    scales: {x: noGridX, y: {...noBorder, ...(cfg.zoom ? zoomQuote(alle) : {beginAtZero: cfg.typ === 'bar'}),
+                                              ticks: {callback: v => cfg.fmt(v)}}},
+                    plugins: {legend: {display: hatVj}, tooltip: {callbacks: {
+                        label: c => c.dataset.label + ': ' + cfg.fmt(c.parsed.y),
+                        footer: items => !cfg.ideen ? '' : items.map(it => {
+                            const src = it.dataset.label === String(M.jahr) ? M.werte : M.vj;
+                            const n = src ? src.anzahl[it.dataIndex] : null;
+                            return n == null ? '' : it.dataset.label + ': ' + n + ' ' + (n === 1 ? 'Vorschlag' : 'Vorschläge');
+                        }).filter(Boolean)
+                    }}}
+                };
+            }
+
+            document.getElementById('sheetTitel').textContent = titel;
+            document.getElementById('sheetSub').textContent = sub;
+            document.getElementById('sheetLeer').hidden = mitWert.length > 0;
+            document.getElementById('sheetChartWrap').hidden = mitWert.length === 0;
+            const box = document.getElementById('sheetStats');
+            box.replaceChildren();
+            stats.forEach(([k, v]) => {
+                const d = document.createElement('div'); d.className = 'mini';
+                const a = document.createElement('span'); a.className = 'k'; a.textContent = k;
+                const b = document.createElement('span'); b.className = 'v'; b.textContent = v;
+                d.append(a, b); box.append(d);
+            });
+
+            if (sheetChart) { sheetChart.destroy(); sheetChart = null; }
+            if (!sheet.open) { setzeAnzeige(POPUP_WERTE_STANDARD); sheet.showModal(); }
+            if (!mitWert.length) return;
+            sheetChart = new Chart(document.getElementById('sheetCanvas'), {type: typ, data: {labels: M.monate, datasets: datasets}, options: optionen});
+        }
+        document.querySelectorAll('[data-drill]').forEach(el => el.addEventListener('click', () => oeffneSheet(el.dataset.drill)));
+        document.getElementById('sheetClose').addEventListener('click', () => sheet.close());
+        sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });   // Tippen auf den Hintergrund
+        sheet.addEventListener('close', () => { if (sheetChart) { sheetChart.destroy(); sheetChart = null; } });
+
+        // ---- Mehrarbeit: Monatsdetail (Aufteilung der Zeitzuschläge) und Diagramm ----
+        function oeffneMonat(i) {
+            const mo = S.monate[i];
+            if (!mo || (!mo.zeilen.length && !mo.ruf)) return;
+            if (sheetChart) { sheetChart.destroy(); sheetChart = null; }
+            document.getElementById('sheetTabs').hidden = true;
+            document.getElementById('sheetChartWrap').hidden = true;
+            document.getElementById('sheetLeer').hidden = true;
+            document.getElementById('sheetTitel').textContent = S.monatsnamen[i] + ' ' + S.jahr;
+            document.getElementById('sheetSub').textContent = 'Aufteilung der Zeitzuschläge laut Abrechnung.';
+            const box = document.getElementById('sheetStats');
+            box.replaceChildren();
+            const zeigen = v => v == null ? '–' : zahl1(v);
+            [['Nachtschichtwochen', zeigen(mo.wochen)], ['Nächte', zeigen(mo.naechte)], ['Mehrarbeit Sonntag', stunden(mo.mehr_h)],
+             ['Sonntage Nachtschicht', stunden(mo.sonntag_h)]].forEach(([k, v]) => {
+                const d = document.createElement('div'); d.className = 'mini';
+                const a = document.createElement('span'); a.className = 'k'; a.textContent = k;
+                const b = document.createElement('span'); b.className = 'v'; b.textContent = v;
+                d.append(a, b); box.append(d);
+            });
+            const liste = document.getElementById('sheetListe');
+            liste.replaceChildren();
+            mo.zeilen.forEach(z => {
+                const row = document.createElement('div'); row.className = 'zrow' + (z.art === 'nacht' ? ' ignoriert' : '');
+                const zb = document.createElement('div'); zb.className = 'zb';
+                const dot = document.createElement('i'); dot.className = z.art;
+                zb.append(dot, document.createTextNode(z.b));
+                const zv = document.createElement('div'); zv.className = 'zv'; zv.textContent = stunden(z.h);
+                const zs = document.createElement('div'); zs.className = 'zs'; zs.textContent = z.info || '';
+                const zw = document.createElement('div'); zw.className = 'zw'; zw.textContent = z.w != null ? eur(z.w) : '';
+                row.append(zb, zv, zs, zw);
+                liste.append(row);
+            });
+            if (mo.ruf) {                      // roter Hinweis: Rufbereitschaft in diesem Monat
+                const box2 = document.createElement('div'); box2.className = 'ruf-banner';
+                box2.innerHTML = WECKER;
+                const t = document.createElement('div');
+                const b2 = document.createElement('b'); b2.textContent = 'Rufbereitschaft in diesem Monat';
+                t.append(b2);
+                (mo.ruf_zeilen || []).forEach(rz => { const sp = document.createElement('span'); sp.textContent = rz.z; t.append(sp); });
+                box2.append(t);
+                liste.prepend(box2);
+            }
+            liste.hidden = false;
+            if (!sheet.open) { setzeAnzeige(POPUP_WERTE_STANDARD); sheet.showModal(); }
+        }
+        document.querySelectorAll('[data-zmonat]').forEach(el => el.addEventListener('click', () => oeffneMonat(Number(el.dataset.zmonat))));
+        if (ctx('cSchicht')) {
+            new Chart(ctx('cSchicht'), {
+                type: 'bar',
+                data: {labels: S.monatsnamen, datasets: [
+                    {label: 'Nachtschichtwochen', data: S.monate.map(m => m.wochen), backgroundColor: C.nacht, borderRadius: 5},
+                    {label: 'Mehrarbeit Sonntag (h)', data: S.monate.map(m => m.mehr_h), backgroundColor: C.sonntag, borderRadius: 5, yAxisID: 'y1'}
+                ]},
+                options: {interaction: {mode: 'index', intersect: false},
+                          scales: {x: noGridX, y: {...noBorder, beginAtZero: true, ticks: {precision: 0}, title: {display: true, text: 'Wochen'}},
+                                   y1: {position: 'right', ...noBorder, beginAtZero: true, grid: {drawOnChartArea: false}, title: {display: true, text: 'Stunden'}}},
+                          plugins: {tooltip: {callbacks: {
+                              label: c => c.datasetIndex === 0 ? zahl1(c.parsed.y) + ' ' + (c.parsed.y === 1 ? 'Nachtschichtwoche' : 'Nachtschichtwochen') : 'Mehrarbeit Sonntag: ' + stunden(c.parsed.y),
+                              footer: items => { const m = S.monate[items[0].dataIndex]; return m.naechte == null ? '' : m.naechte + ' Nächte'; }
+                          }}}}
+            });
+        }
+
+
+}
+function initVerlauf(H) {
+
+        const hCharts = [];
+        let off = 0;  // Versatz der angezeigten Monate gegenüber H (für Tooltips)
+        // keys[i] = Schlüssel in H für Dataset i (für das Zuschneiden des Zeitraums)
+        const reg = (chart, keys) => { chart._keys = keys; hCharts.push(chart); };
+        const idx = {interaction: {mode: 'index', intersect: false}};
+
+        reg(new Chart(ctx('hBN'), {
+            type: 'line',
+            data: {labels: H.labels, datasets: [
+                {label: 'Brutto', data: H.brutto, spanGaps: true, ...line(C.brutto)},
+                {label: 'Netto', data: H.netto, spanGaps: true, ...line(C.netto)},
+                {label: 'Netto Ø 12 Monate', data: H.netto_avg, spanGaps: true, ...line('rgba(20,163,139,.7)', {borderDash: [6, 5], borderWidth: 2})}
+            ]},
+            options: {...idx, scales: {y: {...noBorder, ticks: {callback: v => eur(v)}}, x: noGridX},
+                      plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + eur(c.parsed.y)}}}}
+        }), ['brutto', 'netto', 'netto_avg']);
+
+        reg(new Chart(ctx('hZK'), {
+            type: 'bar',
+            data: {labels: H.labels, datasets: [
+                {type: 'line', label: 'Zeitkonto (h)', data: H.zeitkonto, yAxisID: 'y', order: 0, spanGaps: true, ...line(C.zeit)},
+                {type: 'bar', label: 'Veränderung zum Vormonat (h)', data: H.zk_delta, yAxisID: 'y1', order: 1, borderRadius: 3,
+                 backgroundColor: c => (c.raw ?? 0) >= 0 ? 'rgba(20,163,139,.55)' : 'rgba(214,51,108,.55)'}
+            ]},
+            options: {...idx, scales: {
+                y: {position: 'left', ...noBorder, title: {display: true, text: 'Stand (h)'}},
+                y1: {position: 'right', ...noBorder, grid: {drawOnChartArea: false}, title: {display: true, text: 'Veränderung (h)'}},
+                x: noGridX}}
+        }), ['zeitkonto', 'zk_delta']);
+
+        reg(new Chart(ctx('hU'), {
+            type: 'line',
+            data: {labels: H.labels, datasets: [
+                {label: 'Resturlaub lfd. Jahr (Tage)', data: H.urlaub, stepped: true, spanGaps: true, ...line(C.urlaub)},
+                {label: 'Resturlaub Vorjahr (Tage)', data: H.urlaub_vj, stepped: true, spanGaps: true, ...line(C.vj, {borderDash: [6, 5]})},
+                {label: 'Sonderurlaub T-Zug (Tage)', data: H.tzug, stepped: true, spanGaps: true, ...line(C.tzug)}
+            ]},
+            options: {...idx, scales: {y: {beginAtZero: true, ...noBorder}, x: noGridX}}
+        }), ['urlaub', 'urlaub_vj', 'tzug']);
+
+        if (ctx('hNS')) reg(new Chart(ctx('hNS'), {
+            type: 'bar',
+            data: {labels: H.labels, datasets: [{label: 'Nachtschichtwochen', data: H.wochen, backgroundColor: C.nacht, borderRadius: 3}]},
+            options: {...idx, scales: {x: noGridX, y: {...noBorder, beginAtZero: true, ticks: {precision: 0}}},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => c.parsed.y + ' ' + (c.parsed.y === 1 ? 'Nachtschichtwoche' : 'Nachtschichtwochen')}}}}
+        }), ['wochen']);
+
+        if (ctx('hMS')) reg(new Chart(ctx('hMS'), {
+            type: 'bar',
+            data: {labels: H.labels, datasets: [{label: 'Mehrarbeit Sonntag', data: H.mehr_so, backgroundColor: C.sonntag, borderRadius: 3}]},
+            options: {...idx, scales: {x: noGridX, y: {...noBorder, beginAtZero: true, ticks: {callback: v => v + ' h'}}},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => 'Mehrarbeit Sonntag: ' + stunden(c.parsed.y)}}}}
+        }), ['mehr_so']);
+
+        if (ctx('hGF')) reg(new Chart(ctx('hGF'), {
+            type: 'line',
+            data: {labels: H.labels, datasets: [
+                {label: 'Gastronomie', data: H.gastro, spanGaps: true, ...line(C.gastro)},
+                {label: 'Fahrrad (Kosten)', data: H.fahrrad, spanGaps: true, ...line(C.fahrrad)}
+            ]},
+            options: {...idx, scales: {y: {beginAtZero: true, ...noBorder, ticks: {callback: v => eur(v)}}, x: noGridX},
+                      plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + eur(c.parsed.y)}}}}
+        }), ['gastro', 'fahrrad']);
+
+        reg(new Chart(ctx('hL'), {
+            type: 'line',
+            data: {labels: H.labels, datasets: [{label: 'Leistung', data: H.leistung, stepped: true, spanGaps: true, ...line(C.leistung)}]},
+            options: {...idx, scales: {y: {...noBorder, ticks: {callback: v => v + ' %'}}, x: noGridX},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {
+                          label: c => 'Leistung: ' + pct(c.parsed.y),
+                          footer: items => { const eg = H.eg[items[0].dataIndex + off]; return eg ? 'Entgeltgruppe: ' + eg : ''; }
+                      }}}}
+        }), ['leistung']);
+
+        reg(new Chart(ctx('hQ'), {
+            type: 'line',
+            data: {labels: H.labels, datasets: [{label: 'Netto-Quote', data: H.netto_quote, spanGaps: true, ...line(C.netto)}]},
+            options: {scales: {y: {...noBorder, ...zoomQuote(H.netto_quote), ticks: {callback: v => v + ' %'}}, x: noGridX},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => pct(c.parsed.y)}}}}
+        }), ['netto_quote']);
+
+        reg(new Chart(ctx('hI'), {
+            type: 'bar',
+            data: {labels: H.labels, datasets: [{label: 'Ideenprämien', data: H.ideen, backgroundColor: C.brutto, borderRadius: 4}]},
+            options: {scales: {y: {beginAtZero: true, ...noBorder, ticks: {callback: v => eur(v)}}, x: noGridX},
+                      plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => eur(c.parsed.y)}}}}
+        }), ['ideen']);
+
+        // Untermenü am Netto-Diagramm: Brutto und Netto oder Ultimo und Rest (zweites Diagramm entsteht beim ersten Öffnen)
+        let aktuellerBereich = 0, urChart = null;
+        const schnitt = arr => aktuellerBereich ? arr.slice(-aktuellerBereich) : arr;
+        function zeigeUltimoRest() {
+            if (urChart) { urChart.resize(); return; }
+            urChart = new Chart(ctx('hUR'), {
+                type: 'bar',
+                data: {labels: schnitt(H.labels), datasets: [
+                    {type: 'bar', label: 'Ultimo', data: schnitt(H.ultimo), backgroundColor: C.netto, borderRadius: 4, order: 1},
+                    {type: 'bar', label: 'Rest und Nachzahlung', data: schnitt(H.rest), backgroundColor: C.rest, borderRadius: 4, order: 1},
+                    {type: 'line', label: 'Ultimo Ø 12 Monate', data: schnitt(H.ultimo_avg), spanGaps: true, order: 0,
+                     ...line(C.brutto, {borderDash: [6, 5], borderWidth: 2})}
+                ]},
+                options: {...idx, scales: {x: {stacked: true, ...noGridX}, y: {stacked: true, ...noBorder, ticks: {callback: v => eur(v)}}},
+                          plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + eur(c.parsed.y),
+                              footer: items => { const t = items.filter(i => i.dataset.type === 'bar').reduce((a, i) => a + (i.parsed.y || 0), 0);
+                                                 return t ? 'Zusammen: ' + eur(t) : ''; }}}}}
+            });
+            urChart._keys = ['ultimo', 'rest', 'ultimo_avg'];
+            hCharts.push(urChart);
+        }
+        document.querySelectorAll('[data-bn]').forEach(b => b.addEventListener('click', () => {
+            const ur = b.dataset.bn === 'ur';
+            document.querySelectorAll('[data-bn]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+            document.getElementById('bnWrap').hidden = ur;
+            document.getElementById('urWrap').hidden = !ur;
+            document.getElementById('bnTitel').textContent = ur ? 'Ultimo und Rest' : 'Brutto und Netto';
+            document.getElementById('bnSub').textContent = ur
+                ? 'Der Ultimo ist die Überweisung zum Monatsende, der Rest kommt als Rest- oder Nachzahlung dazu. Die gestrichelte Linie zeigt den Ultimo als Durchschnitt der letzten 12 Monate.'
+                : 'Die gestrichelte Linie zeigt das Netto als Durchschnitt der letzten 12 Monate.';
+            if (ur) zeigeUltimoRest();
+        }));
+
+        // Zeitraum umschalten (ohne Neuladen): letzte n Monate, 0 = alles
+        function setRange(n) {
+            aktuellerBereich = n;
+            off = n ? Math.max(0, H.labels.length - n) : 0;
+            hCharts.forEach(ch => {
+                ch.data.labels = n ? H.labels.slice(-n) : H.labels;
+                ch.data.datasets.forEach((ds, i) => { const arr = H[ch._keys[i]]; ds.data = n ? arr.slice(-n) : arr; });
+                ch.update();
+            });
+            document.querySelectorAll('[data-range]').forEach(b => b.classList.toggle('active', Number(b.dataset.range) === n));
+        }
+        document.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => setRange(Number(b.dataset.range))));
+
+
+}
+function initVergleich(V) {
+
+        const fmt = V.typ === 'pct' ? pct : (V.typ === 'h' ? stunden : (V.typ === 'n' ? zahl1 : eur));
+        const yTick = V.typ === 'pct' ? (x => x + ' %') : (V.typ === 'h' ? (x => x + ' h') : (V.typ === 'n' ? (x => x) : (x => eur(x))));
+
+        new Chart(ctx('cVergleich'), {
+            type: 'bar',
+            data: {labels: V.monate_labels, datasets: V.serien.map((s, i) => ({
+                label: String(s.jahr), data: s.werte, backgroundColor: PALETTE[i % PALETTE.length], borderRadius: 6}))},
+            options: {scales: {y: {...noBorder, ticks: {callback: yTick}}, x: noGridX},
+                      plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + fmt(c.parsed.y)}}}}
+        });
+
+        if (V.kumuliert && ctx('cKumuliert')) {
+            new Chart(ctx('cKumuliert'), {
+                type: 'line',
+                data: {labels: V.monate_labels, datasets: V.serien.map((s, i) => ({
+                    label: String(s.jahr), data: s.kum, ...line(PALETTE[i % PALETTE.length])}))},
+                options: {interaction: {mode: 'index', intersect: false},
+                          scales: {y: {...noBorder, ticks: {callback: yTick}}, x: noGridX},
+                          plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + fmt(c.parsed.y)}}}}
+            });
+        }
+
+}
+/* ===== Anwendung: Zustand, Ansichtenwechsel, PDF-Einlesen im Browser (pdf.js), Demo ===== */
+const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [] };
+let ROWS = [];
+const $ = s => document.querySelector(s);
+
+function berechne() { ROWS = bauePortfolio(APP.eintraege); }
+function destroyCharts() { try { if (window.Chart && Chart.instances) Object.values(Chart.instances).forEach(c => c.destroy()); } catch (e) {} }
+
+function monatsWarnung(r) {
+  if (!r.real) return "";
+  if (r.brutto == null || r.netto == null || r.abz == null) return "Werte fehlen";
+  const diff = r.brutto - r.abz - (r.sonst || 0) - r.netto;
+  return Math.abs(diff) > 1 ? `Abweichung ${deZahl(Math.abs(diff))} €` : "";
+}
+
+function kontextJahr(jahr) {
+  const jahre = jahreAbsteigend(ROWS);
+  const kpi = kpiJahr(ROWS, jahr), entw = baueEntwicklung(ROWS);
+  const pos = ROWS.map(r => r.j).lastIndexOf(jahr);
+  const stand = { eg: standAn(entw, "eg", pos), lp: standAn(entw, "lp", pos) };
+  const dj = zeilenJahr(ROWS, jahr).slice().sort((a, b) => b.m - a.m).map(r => ({ ...r, warn: monatsWarnung(r) }));
+  return { jahre, kpi, stand, erhoehungen: erhoehungenJeJahr(entw), schicht: baueSchicht(ROWS, jahr), schichtJahre: baueSchichtJahre(ROWS),
+    monatsZeilen: dj, gesamtVorschlaege: ROWS.reduce((s, r) => s + r.anzahl, 0), gesamtPraemien: ssum(ROWS.map(r => r.summe)),
+    drill: baueDrill(ROWS, jahr, jahre), chart: baueChart(ROWS, jahr) };
+}
+
+function chipsHtml(ctx) {
+  if (APP.ansicht === "jahr") {
+    return `<nav class="chips" aria-label="Jahr">${ctx.jahre.map(j => { const er = ctx.erhoehungen[j];
+      return `<a class="chip ${j === APP.jahr ? "active" : ""}" data-keepscroll data-jahr="${j}" href="#" ${er ? `title="Erhöhung: ${esc(er.map(e => e.text).join(", "))}" aria-label="${j}, mit Erhöhung"` : ""}>${er ? '<span class="raise" aria-hidden="true">▲</span>' : ""}${j}</a>`; }).join("")}</nav>`;
+  }
+  if (APP.ansicht === "verlauf")
+    return `<nav class="chips" aria-label="Zeitraum"><button class="chip" data-range="12" type="button">12 Monate</button><button class="chip" data-range="24" type="button">24 Monate</button><button class="chip active" data-range="0" type="button">Alles</button></nav>`;
+  return "";
+}
+
+function render() {
+  const y = window.scrollY;
+  destroyCharts();
+  const host = $("#app"), dlg = $("#dlgHost"), chips = $("#chipsHost");
+  document.querySelectorAll(".dock [data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === APP.ansicht));
+  dlg.innerHTML = "";
+  try {
+    if (!ROWS.length || APP.ansicht === "start") { APP.ansicht = ROWS.length ? "jahr" : "start"; if (!ROWS.length) { host.innerHTML = htmlStart(); chips.innerHTML = ""; bindStart(); return; } }
+    const jahre = jahreAbsteigend(ROWS);
+    if (!jahre.includes(APP.jahr)) APP.jahr = jahre[0];
+    if (APP.ansicht === "jahr") {
+      const c = kontextJahr(APP.jahr);
+      chips.innerHTML = chipsHtml(c); host.innerHTML = htmlJahr(c); dlg.innerHTML = DIALOG_HTML;
+      initJahr(c.chart, c.drill, c.schicht, WECKER_SVG);
+      centerChip();
+    } else if (APP.ansicht === "verlauf") {
+      const b = baueVerlauf(ROWS); chips.innerHTML = chipsHtml({});
+      if (!b) { host.innerHTML = '<div class="plate empty">Noch keine Daten vorhanden.</div>'; }
+      else { host.innerHTML = htmlVerlauf({ vk: b.kpi, schichtJahre: baueSchichtJahre(ROWS) }); initVerlauf(b.verlauf); }
+    } else if (APP.ansicht === "vergleich") {
+      chips.innerHTML = "";
+      const asc = jahre.slice().sort((a, b) => a - b);
+      if (!APP.vg.jahre) APP.vg.jahre = jahre.slice(0, 2);
+      const v = baueVergleich(ROWS, jahre, APP.vg);
+      host.innerHTML = htmlVergleich({ v, jahreAsc: asc });
+      bindVergleich();
+      if (v.sel.length && v.monate.length) initVergleich(v);
+    } else {
+      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise }); bindDaten();
+    }
+  } catch (e) {
+    console.error(e);
+    host.innerHTML = `<div class="plate"><h2 class="sec-title">Anzeige-Fehler</h2><p class="hint">Diese Ansicht konnte nicht aufgebaut werden. Bitte schick diesen Text weiter:</p><pre style="white-space:pre-wrap;font-size:.8rem">${esc(String(e && e.stack || e))}</pre></div>`;
+  }
+  window.scrollTo(0, y);
+}
+function centerChip() {
+  const aktiv = document.querySelector(".top .chip.active[data-keepscroll]");
+  if (aktiv) { const row = aktiv.parentElement, rb = row.getBoundingClientRect(), ab = aktiv.getBoundingClientRect(); row.scrollLeft += (ab.left - rb.left) - (rb.width - ab.width) / 2; }
+}
+
+/* ---------- Bedienung ---------- */
+document.addEventListener("click", ev => {
+  const nav = ev.target.closest("[data-nav]");
+  if (nav) { ev.preventDefault(); APP.ansicht = nav.dataset.nav; window.scrollTo(0, 0); render(); return; }
+  const chip = ev.target.closest("a.chip[data-jahr]");
+  if (chip) { ev.preventDefault(); APP.jahr = +chip.dataset.jahr; render(); }
+});
+function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); }
+function bindDaten() { const b = $("#loeschBtn"); if (b) b.addEventListener("click", () => { if (confirm("Alle geladenen Daten aus diesem Fenster löschen?")) { APP.eintraege = []; APP.hinweise = []; APP.jahr = null; berechne(); APP.ansicht = "start"; render(); } }); }
+function bindVergleich() {
+  const f = $("#vgForm"); if (!f) return;
+  f.addEventListener("submit", ev => {
+    ev.preventDefault(); const fd = new FormData(f);
+    APP.vg = { jahre: fd.getAll("jahre").map(Number), monate: fd.getAll("monate").map(Number), kennzahl: fd.get("kennzahl") || "netto", gleich: fd.has("gleich") };
+    render();
+  });
+}
+
+/* ---------- Status ---------- */
+let statusTimer = null;
+function status(text, dauerMs) {
+  const el = $("#statusBar"); if (!el) return;
+  el.textContent = text; el.hidden = !text; clearTimeout(statusTimer);
+  if (text && dauerMs) statusTimer = setTimeout(() => { el.hidden = true; }, dauerMs);
+}
+
+/* ---------- Bibliotheken nachladen (mehrere Ausweichadressen) ---------- */
+const APP_VERSION = "2026-10-04-gh";
+function ladeSkript(urls) {
+  return new Promise((resolve, reject) => {
+    let i = 0;
+    const naechste = () => {
+      if (i >= urls.length) { reject(new Error("Skript nicht ladbar")); return; }
+      const url = urls[i++], s = document.createElement("script");
+      s.src = url; s.onload = () => resolve(url); s.onerror = () => { s.remove(); naechste(); };
+      document.head.appendChild(s);
+    };
+    naechste();
+  });
+}
+/* Die 'legacy'-Ausgabe von pdf.js läuft auch auf älteren iPhones; sie wird erst beim ersten Einlesen geladen */
+const PDFJS_QUELLEN = [
+  ["https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js", "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js"],
+  ["https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js", "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js"],
+  ["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"],
+];
+const CHART_QUELLEN = ["https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js", "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js"];
+let pdfJsLaden = null;
+function ladePdfJs() {
+  if (window.pdfjsLib && pdfjsLib.getDocument) return Promise.resolve();
+  if (!pdfJsLaden) pdfJsLaden = ladeSkript(PDFJS_QUELLEN.map(q => q[0])).then(url => {
+    const paar = PDFJS_QUELLEN.find(q => q[0] === url);
+    if (pdfjsLib.GlobalWorkerOptions) pdfjsLib.GlobalWorkerOptions.workerSrc = paar[1];
+  }).catch(e => { pdfJsLaden = null; throw e; });
+  return pdfJsLaden;
+}
+
+/* ---------- Systemprüfung (hilft, wenn etwas auf einem Gerät nicht läuft) ---------- */
+function systemInfo() {
+  let ls = "ja"; try { localStorage.setItem("t", "1"); localStorage.removeItem("t"); } catch (e) { ls = "nein"; }
+  const dlg = !!(typeof HTMLDialogElement !== "undefined" && HTMLDialogElement.prototype.showModal) && !window.__dialogErsatz;
+  return [`App-Version: ${APP_VERSION}`, `Browser: ${navigator.userAgent}`, `Adresse: ${location.protocol}//${location.host || "(lokale Datei)"}`,
+    `Diagramme: ${window.__keinChart ? "nicht geladen" : "geladen"}`, `PDF-Bibliothek: ${window.pdfjsLib ? "geladen" : "wird beim ersten Einlesen geladen"}`,
+    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`].join("\n");
+}
+
+/* ---------- PDF lesen (pdf.js liefert Textstücke mit Position; wir machen daraus Wörter) ---------- */
+function itemsZuWoertern(items, seitenHoehe) {
+  const out = [];
+  for (const it of items) {
+    const str = it.str; if (!str || !str.trim()) continue;
+    const x = it.transform[4], basis = seitenHoehe - it.transform[5];
+    const h = Math.abs(it.height || it.transform[3] || 9) || 9, w = it.width || 0, len = str.length;
+    const y0 = basis - h * 0.9, y1 = basis + h * 0.3;
+    const re = /\S+/g; let m;
+    while ((m = re.exec(str)) !== null) out.push([x + w * m.index / len, y0, x + w * (m.index + m[0].length) / len, y1, m[0]]);
+  }
+  return out;
+}
+async function leseSeiten(file) {
+  try { await ladePdfJs(); } catch (e) { throw new Error("Die PDF-Bibliothek konnte nicht geladen werden (Internetverbindung nötig)"); }
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  const seiten = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    seiten.push(itemsZuWoertern(tc.items, vp.height));
+  }
+  return seiten;
+}
+
+function nimmAuf(name, seiten, neu, hinweise) {
+  const r = verarbeitePdf(seiten);
+  if (!r.monat) { hinweise.push(`${name}: Monat nicht erkannt, übersprungen`); return false; }
+  if (APP.eintraege.some(e => e.monat === r.monat) || neu.some(e => e.monat === r.monat)) { hinweise.push(`${name}: ${r.monat} ist schon geladen, übersprungen`); return false; }
+  const fehlend = ["Brutto (€)", "Netto (€)", "Gesetzl. Abzüge (€)"].filter(k => r.abr[k] == null);
+  if (fehlend.length) hinweise.push(`${name} (${r.monat}): nicht gefunden: ${fehlend.join(", ")}`);
+  r.warnungen.forEach(w => hinweise.push(`${name} (${r.monat}): ${w}`));
+  neu.push({ monat: r.monat, abr: r.abr, ideen: r.ideen, datei: name });
+  return true;
+}
+async function ladeDateien(files) {
+  const liste = [...files].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+  if (!liste.length) { status("Bitte PDF-Dateien auswählen.", 4000); return; }
+  const neu = [], hinweise = [];
+  for (let i = 0; i < liste.length; i++) {
+    status(`Lese ${liste[i].name} (${i + 1} von ${liste.length}) …`);
+    try { nimmAuf(liste[i].name, await leseSeiten(liste[i]), neu, hinweise); }
+    catch (e) { hinweise.push(`${liste[i].name}: konnte nicht gelesen werden (${e && e.message || e})`); }
+  }
+  APP.eintraege.push(...neu); APP.hinweise.push(...hinweise);
+  berechne();
+  status(neu.length ? `${neu.length} ${plural(neu.length, "Monat", "Monate")} eingelesen${hinweise.length ? `, ${hinweise.length} Hinweis${hinweise.length === 1 ? "" : "e"} unter „Daten“` : ""}.` : "Keine Abrechnung erkannt. Details unter „Daten“.", 6000);
+  if (!ROWS.length) APP.ansicht = "daten"; else if (APP.ansicht === "start" || APP.ansicht === "daten") APP.ansicht = "jahr";
+  if (neu.length) APP.jahr = null;
+  render();
+  const inp = $("#pdfInput"); if (inp) inp.value = "";
+}
+
+/* ---------- Demo-Daten (erfunden, deterministisch) ---------- */
+function demoEintraege() {
+  const out = []; let z = 7; const zufall = () => (z = (z * 9301 + 49297) % 233280) / 233280;
+  for (let j = 2023; j <= 2026; j++) for (let m = 1; m <= 12; m++) {
+    if (j === 2026 && m > 9) break; if ((j === 2024 && m === 3) || (j === 2025 && m === 8)) continue;
+    const n = (j - 2023) * 12 + m, brutto = 4700 + 22 * n + (m === 12 ? 900 : 0), abz = runde(brutto * (0.33 + (m === 12 ? 0.06 : 0)), 2), sonst = m % 4 ? runde(10 + (m % 3) * 40.5, 2) : null;
+    const netto = runde(brutto - abz - (sonst || 0), 2), so = m % 4 === 0 ? 16.75 : (m % 4 === 2 ? 7.5 : 0), mehr = m % 2 ? 11 : 0;
+    const zeilen = [{ b: `Referenz Schicht ${String(m).padStart(2, "0")}.${j}`, h: 7, w: 7.58 }];
+    if (so) zeilen.push({ b: "Mehrarbeit So. 88% DNS", h: so, w: null }); if (mehr) zeilen.push({ b: "Mehrarbeit Sonntag 50%", h: mehr, w: null });
+    zeilen.push({ b: "Schicht Nacht 38% DNS", h: 63, w: null });
+    const ruf = (j === 2024 && m === 6) || (j === 2026 && m === 2) ? [{ z: "Rufbereitschaft L L J 50,00", w: 50 }] : [];
+    const ultimo = runde(netto - 280 - (n % 5) * 20, 2), g = j >= 2024;
+    const abr = { "Brutto (€)": brutto, "Netto (€)": netto, "Gesetzl. Abzüge (€)": abz, "Sonstige Abzüge (€)": sonst, "Ultimo (€)": ultimo, "Rest (€)": runde(netto - ultimo, 2),
+      "Gastronomie (€)": runde(55 + zufall() * 40, 2), "Fahrrad (€)": g ? 8 : null, "Fahrrad Umwandlung (€)": g ? 134.27 : null, "Fahrrad Zuschuss (€)": g ? 6.71 : null, "Fahrrad GWV (€)": g ? 8 : null,
+      "Schichtdauer (h)": 7, "Sonntag Nacht (h)": so, "Mehrarbeit Sonntag (h)": mehr, "Rufbereitschaft": ruf.length ? 1 : 0, "Rufbereitschaft (JSON)": ruf.length ? JSON.stringify(ruf) : null,
+      "Zuschläge (JSON)": JSON.stringify(zeilen), "Zeitkonto (h)": runde(80 + n * 3.1 - (n % 7) * 8, 2), "Resturlaub lfd. Jahr (Tage)": m < 12 ? 30 - m * 2 : 0,
+      "Resturlaub VJ (Tage)": m < 4 ? 3 : 0, "Sonderurlaub T-Zug (Tage)": 2, "Wochenstunden": 35, "Leistung (%)": (j < 2025 || (j === 2025 && m < 4)) ? 12 : 15, "Entgeltgruppe": (j < 2024 || (j === 2024 && m < 7)) ? "11" : "12" };
+    out.push({ monat: `${String(m).padStart(2, "0")}.${j}`, abr, ideen: m % 3 ? [] : [100, 50.5].slice(0, 1 + (m % 2)), datei: "Demo" });
+  }
+  return out;
+}
+function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Alle Zahlen sind erfunden."]; APP.jahr = null; APP.ansicht = "jahr"; berechne(); render(); }
+
+/* ---------- Start ---------- */
+function startApp() {
+  const inp = $("#pdfInput");
+  inp.addEventListener("change", () => { if (inp.files && inp.files.length) ladeDateien(inp.files); });
+  window.addEventListener("dragover", e => e.preventDefault());
+  window.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) ladeDateien(e.dataTransfer.files); });
+  render();
+}
+window.__app = { APP, render, ladeDemo, nimmAuf, berechne, ladeDateien, itemsZuWoertern, rows: () => ROWS };
+
+startApp();
+if (window.__keinChart) {
+    status("Diagramme werden von einer anderen Quelle geladen …");
+    ladeSkript(CHART_QUELLEN).then(function () {
+        window.__keinChart = false; applyChartTheme(); status("Diagramme geladen.", 3000); render();
+    }).catch(function () { status("Die Diagramm-Bibliothek konnte nicht geladen werden. Für Diagramme wird Internet benötigt.", 8000); });
+}
+</script>
+</body>
+</html>
