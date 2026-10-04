@@ -1043,7 +1043,44 @@ function baueEntwicklung(rows) {
         aenderungen.push({ j: rows[i].j, m: rows[i].m, text: name === "eg" ? `Entgeltgruppe von ${arr[i - 1]} auf ${arr[i]}` : `Leistung von ${deZahl(arr[i - 1], 0)} % auf ${deZahl(arr[i], 0)} %` });
     }
   }
-  return { rows, eg, lp, aenderungen };
+  return { rows, eg, lp, aenderungen, egRoh, lpRoh };
+}
+const EG_FARBEN = ["#4A5CF0", "#0F8F7A", "#C2255C", "#7C4DDB", "#0C8FC7", "#D9730D", "#5B6B7F", "#A87400"];
+/* Gesamter Verlauf von Entgeltgruppe und Leistung: Stufen (gleichbleibende Zeiträume), Erhöhungen, Zeitreihen für das Diagramm */
+function baueStufen(rows) {
+  const entw = baueEntwicklung(rows), n = rows.length;
+  const num = v => { if (v == null) return null; const t = String(v).match(/\d+(?:[.,]\d+)?/); return t ? parseFloat(t[0].replace(",", ".")) : null; };
+  const kurz = r => `${MON[r.m - 1]} ${r.j}`, lpT = x => deZahl(x, Number.isInteger(x) ? 0 : 1);
+  let start = 0; while (start < n && entw.eg[start] == null && entw.lp[start] == null) start++;
+  const hat = start < n, stufen = [], farbIdx = new Map();
+  const farbe = eg => { const k = String(eg == null ? "" : eg); if (!farbIdx.has(k)) farbIdx.set(k, farbIdx.size); return EG_FARBEN[farbIdx.get(k) % EG_FARBEN.length]; };
+  const gleich = (i, j) => entw.eg[i] === entw.eg[j] && entw.lp[i] === entw.lp[j];
+  let s = start;
+  for (let k = start + 1; hat && k <= n; k++) {
+    if (k === n || !gleich(k, s)) {
+      const brutto = rows.slice(s, k).map(r => r.brutto).filter(x => x != null);
+      stufen.push({ eg: entw.eg[s], lp: entw.lp[s], von: kurz(rows[s]), bis: kurz(rows[k - 1]), monate: k - s, dauer: dauerLang(k - s),
+        brutto_avg: brutto.length ? nn(mittel(brutto)) : null, farbe: farbe(entw.eg[s]), aenderungen: [], aktuell: k === n, start: s });
+      s = k;
+    }
+  }
+  const erhoeht = new Array(n).fill(false);
+  for (let i = 1; i < stufen.length; i++) {
+    const a = stufen[i - 1], b = stufen[i];
+    if (a.eg !== b.eg && a.eg != null && b.eg != null) {
+      const richtung = num(a.eg) != null && num(b.eg) != null ? (num(b.eg) > num(a.eg) ? "up" : "down") : "";
+      b.aenderungen.push({ richtung, text: `Entgeltgruppe von ${a.eg} auf ${b.eg}` }); if (richtung === "up") erhoeht[b.start] = true;
+    }
+    if (a.lp !== b.lp && a.lp != null && b.lp != null) {
+      const richtung = b.lp > a.lp ? "up" : "down";
+      b.aenderungen.push({ richtung, text: `Leistung von ${lpT(a.lp)} % auf ${lpT(b.lp)} %` }); if (richtung === "up") erhoeht[b.start] = true;
+    }
+  }
+  const abweichend = (roh, glatt) => roh.reduce((z, v, i) => z + (v != null && v !== glatt[i] ? 1 : 0), 0);
+  const letzte = stufen[stufen.length - 1];
+  return { hat, stufen, labels: rows.map(r => `${MON[r.m - 1]} ${String(r.j).slice(2)}`), egNum: entw.eg.map(num), egText: entw.eg,
+    lp: entw.lp.map(v => v == null ? null : nn(v)), erhoeht, ausreisser: abweichend(entw.egRoh, entw.eg) + abweichend(entw.lpRoh, entw.lp),
+    erhoehungen: stufen.reduce((z, x) => z + x.aenderungen.filter(a => a.richtung === "up").length, 0), aktuell: letzte ? { eg: letzte.eg, lp: letzte.lp } : null };
 }
 function standAn(entw, key, pos) {
   const arr = entw[key]; const v = arr[pos];
@@ -1259,7 +1296,13 @@ const kachel = (drill, k, v, s, extra) => `<button type="button" class="stat sta
 function htmlJahr(c) {
   const { kpi, stand, schicht, schichtJahre } = c; const b = kpi.brutto;
   const erJahr = c.erhoehungen[kpi.jahr];
-  let h = "";
+  /* --- Ganz oben: Stufe (Entgeltgruppe und Leistung); Antippen zeigt den gesamten Verlauf mit Erhöhungen --- */
+  const klick = !!(c.stufen && c.stufen.hat);
+  const sk = (k, w, s) => klick ? `<button type="button" class="stat stat-btn" data-stufen aria-haspopup="dialog"><span class="k">${k}</span><span class="v">${w}</span>${s}${peek()}</button>`
+    : `<div class="stat"><span class="k">${k}</span><span class="v">${w}</span>${s}</div>`;
+  let h = `<section class="group" style="margin-bottom:26px"><h2 class="group-title">Stufe</h2><div class="stats">
+    ${sk("Entgeltgruppe", esc(stand.eg ? stand.eg.wert : (kpi.eg || "–")), seitBlock(stand.eg, kpi.eg_wechsel ? "Wechsel im Jahr, zuvor " + kpi.eg_erste : ""))}
+    ${sk("Leistungs&shy;prozente", fPct(stand.lp ? stand.lp.wert : kpi.leistung), seitBlock(stand.lp, kpi.leistung_wechsel ? "Im Jahr geändert" : ""))}</div></section>`;
   /* --- Kopf: Netto ausgezahlt und Aufteilung --- */
   h += `<section class="slip"><div class="slip-top"><div class="slip-head"><h1 class="year">${kpi.jahr}</h1><span class="pill">${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")} mit Daten</span></div>
     <div class="hero-label">Netto ausgezahlt</div>
@@ -1288,10 +1331,6 @@ function htmlJahr(c) {
     h += kachel("rest", "Restüberweisung", big(kpi.rest_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.rest_schnitt)} pro Monat</span>`);
   }
   h += `</div></section>`;
-  /* --- Gruppe Stufe --- */
-  h += `<section class="group"><h2 class="group-title">Stufe</h2><div class="stats">
-    <div class="stat"><span class="k">Entgeltgruppe</span><span class="v">${esc(stand.eg ? stand.eg.wert : (kpi.eg || "–"))}</span>${seitBlock(stand.eg, kpi.eg_wechsel ? "Wechsel im Jahr, zuvor " + kpi.eg_erste : "")}</div>
-    <button type="button" class="stat stat-btn" data-drill="leistung" aria-haspopup="dialog"><span class="k">Leistungs&shy;prozente</span><span class="v">${fPct(stand.lp ? stand.lp.wert : kpi.leistung)}</span>${seitBlock(stand.lp, kpi.leistung_wechsel ? "Im Jahr geändert" : "")}${peek()}</button></div></section>`;
   /* --- Gruppe Zeitkonto --- */
   h += `<section class="group"><h2 class="group-title">Zeitkonto</h2><div class="stats">
     <button type="button" class="stat stat-btn" data-drill="zeitkonto" aria-haspopup="dialog"><span class="k">Zeitkonto am Jahresende</span><span class="v">${kpi.zk_ende != null ? sens(esc(deZahl(kpi.zk_ende)) + " h") : "–"}</span>
@@ -1354,7 +1393,7 @@ function htmlVerlauf(c) {
   const karte = (k, v, s, pill) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${pill || ""}</div>`;
   const vgl = d => d == null ? "Kein vollständiger Zeitraum davor zum Vergleich" : `Zum Zeitraum davor ${delta(d, true, "%")}`;
   const hStd = x => x == null ? "–" : sens(`${x >= 0 ? "+" : "–"}${esc(deZahl(Math.abs(x)))} h`);
-  let h = htmlZeitraum(c.zr) + `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats auto">
+  let h = (c.zr.modus === "frei" ? htmlZeitraum(c.zr) : "") + `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats auto">
     ${karte("Netto, Ø im Zeitraum", big(vk.netto_z), vgl(vk.netto_delta))}
     ${vk.hat_ultimo ? karte("Ultimo, Ø im Zeitraum", big(vk.ultimo_z), vgl(vk.ultimo_delta)) : ""}
     ${karte("Brutto, Ø im Zeitraum", big(vk.brutto_z), `${vk.monate_z} ${plural(vk.monate_z, "Monat", "Monate")} mit Daten im Zeitraum`)}</div>
@@ -1377,7 +1416,7 @@ function htmlVerlauf(c) {
       ${karte("Mehrarbeit Sonntag im Zeitraum", `${fZahl(sj.gesamt.mehr_h)}<span class="cents"> Std.</span>`, "Ohne Nachtschicht")}</div>` : ""}<div class="grid2">`;
     if (vk.hat_schicht) h += `<section class="plate span2"><h2 class="sec-title">Nachtschichtwochen</h2><p class="sec-sub">Pro Monat, gezählt nach den Sonntagen mit Nachtschicht (Mehrarbeit So. 88 % DNS).</p><div class="canvas-wrap"><canvas id="hNS"></canvas></div></section>
       <section class="plate span2"><h2 class="sec-title">Mehrarbeit Sonntag</h2><p class="sec-sub">Stunden pro Monat an Sonntagen ohne Nachtschicht.</p><div class="canvas-wrap"><canvas id="hMS"></canvas></div></section>`;
-    if (sj) h += `<section class="plate span2"><h2 class="sec-title">Je Jahr im Zeitraum</h2><p class="sec-sub">Eine Nachtschichtwoche hat ${sj.naechte_pro_woche} Nächte (Sonntag bis Samstag).</p><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Nachtschichtwochen</th><th class="num">Nächte</th><th class="num">Mehrarbeit Sonntag</th></tr></thead><tbody>
+    if (sj) h += `<section class="plate span2"><h2 class="sec-title">Nachtschichtwochen und Mehrarbeit je Jahr</h2><p class="sec-sub">Es zählen nur Monate im gewählten Zeitraum. Eine Nachtschichtwoche hat ${sj.naechte_pro_woche} Nächte (Sonntag bis Samstag).</p><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Nachtschichtwochen</th><th class="num">Nächte</th><th class="num">Mehrarbeit Sonntag</th></tr></thead><tbody>
       ${sj.jahre.map(j => `<tr><td>${j.jahr}</td><td class="num">${j.wochen}</td><td class="num">${j.naechte}</td><td class="num">${fZahl(j.mehr_h)} h</td></tr>`).join("")}
       <tr class="summe"><td>Gesamt</td><td class="num">${sj.gesamt.wochen}</td><td class="num">${sj.gesamt.naechte}</td><td class="num">${fZahl(sj.gesamt.mehr_h)} h</td></tr></tbody></table></div></section>`;
     h += `</div></section>`;
@@ -1459,7 +1498,7 @@ function htmlDaten(c) {
 }
 
 const WECKER_SVG = wecker(18);
-function initJahr(D, M, S, WECKER) {
+function initJahr(D, M, S, WECKER, ST) {
 
 
         new Chart(ctx('cAufteilung'), {
@@ -1714,6 +1753,57 @@ function initJahr(D, M, S, WECKER) {
         }
 
 
+        // ---- Stufen: gesamter Verlauf von Entgeltgruppe und Leistung, Erhöhungen hervorgehoben ----
+        function oeffneStufen() {
+            if (!ST || !ST.hat) return;
+            if (sheetChart) { sheetChart.destroy(); sheetChart = null; }
+            document.getElementById('sheetTabs').hidden = true;
+            document.getElementById('sheetLeer').hidden = true;
+            document.getElementById('sheetChartWrap').hidden = false;
+            document.getElementById('sheetTitel').textContent = 'Entgeltgruppe und Leistung im Zeitverlauf';
+            document.getElementById('sheetSub').textContent = 'Alle geladenen Monate. Große Punkte im Diagramm und ▲ in der Liste markieren Erhöhungen.';
+            const box = document.getElementById('sheetStats');
+            box.replaceChildren();
+            const akt = ST.aktuell || {};
+            [['Entgeltgruppe aktuell', akt.eg == null ? '–' : String(akt.eg)], ['Leistung aktuell', akt.lp == null ? '–' : zahl1(akt.lp) + ' %'],
+             ['Erhöhungen', String(ST.erhoehungen)], ['Stufen insgesamt', String(ST.stufen.length)]].forEach(([k, v]) => {
+                const d = document.createElement('div'); d.className = 'mini';
+                const a = document.createElement('span'); a.className = 'k'; a.textContent = k;
+                const b = document.createElement('span'); b.className = 'v'; b.textContent = v;
+                d.append(a, b); box.append(d);
+            });
+            const lpT = x => (Number.isInteger(x) ? String(x) : String(x).replace('.', ',')) + ' %';
+            const titel = s => {
+                const eg = s.eg == null ? null : (/^eg/i.test(String(s.eg)) ? String(s.eg) : 'Entgeltgruppe ' + s.eg), lp = s.lp == null ? null : lpT(s.lp);
+                return eg && lp ? eg + ' mit ' + lp + ' Leistung' : (eg || ('Leistung ' + lp));
+            };
+            let html = '<ol class="steps">';
+            ST.stufen.slice().reverse().forEach(s => {
+                html += '<li class="step" style="--c: ' + s.farbe + '"><span class="pin" aria-hidden="true"></span><div><div class="step-title"><span class="sens">' + esc(titel(s)) + '</span>' +
+                    (s.aktuell ? '<span class="pill">aktuell</span>' : '') + '</div><div class="step-meta"><span>' + esc(s.von) + ' bis ' + esc(s.bis) + '</span><span class="pill">' + esc(s.dauer) + '</span></div>' +
+                    (s.brutto_avg != null ? '<div class="step-meta">Ø Brutto <span class="sens">' + esc(eur(s.brutto_avg)) + '</span> pro Monat</div>' : '') +
+                    (s.aenderungen.length ? '<div class="chipline">' + s.aenderungen.map(a => '<span class="delta ' + a.richtung + '">' + (a.richtung === 'up' ? '▲ ' : a.richtung === 'down' ? '▼ ' : '') + esc(a.text) + '</span>').join('') + '</div>' : '') +
+                    '</div></li>';
+            });
+            html += '</ol>';
+            if (ST.ausreisser) html += '<p class="hint">' + ST.ausreisser + (ST.ausreisser === 1 ? ' einzelner Monat mit abweichendem Wert wurde' : ' einzelne Monate mit abweichendem Wert wurden') + ' hier nicht als Änderung gewertet.</p>';
+            const liste = document.getElementById('sheetListe');
+            liste.innerHTML = html; liste.hidden = false;
+            const punkte = ST.erhoeht.map(x => x ? 6 : 0), hatEg = ST.egNum.some(v => v != null);
+            const datasets = [{label: 'Leistung', data: ST.lp, stepped: true, spanGaps: true, yAxisID: 'y', ...line(C.leistung, {pointRadius: punkte, pointHoverRadius: 6, pointBackgroundColor: C.leistung})}];
+            if (hatEg) datasets.push({label: 'Entgeltgruppe', data: ST.egNum, stepped: true, spanGaps: true, yAxisID: 'y1', ...line(C.brutto, {pointRadius: punkte, pointHoverRadius: 6, pointBackgroundColor: C.brutto, borderDash: [6, 5]})});
+            const skalen = {x: {...noGridX, ticks: {maxTicksLimit: 8, autoSkip: true}}, y: {...noBorder, ticks: {callback: v => v + ' %'}}};
+            if (hatEg) skalen.y1 = {position: 'right', ...noBorder, grid: {drawOnChartArea: false}, ticks: {precision: 0}};
+            if (!sheet.open) { setzeAnzeige(POPUP_WERTE_STANDARD); sheet.showModal(); }
+            sheetChart = new Chart(document.getElementById('sheetCanvas'), {type: 'line', data: {labels: ST.labels, datasets: datasets},
+                options: {interaction: {mode: 'index', intersect: false}, scales: skalen,
+                          plugins: {legend: {display: hatEg}, tooltip: {callbacks: {
+                              label: c => c.dataset.yAxisID === 'y1' ? 'Entgeltgruppe: ' + (ST.egText[c.dataIndex] == null ? '–' : ST.egText[c.dataIndex]) : 'Leistung: ' + (c.parsed.y == null ? '–' : lpT(c.parsed.y)),
+                              footer: items => ST.erhoeht[items[0].dataIndex] ? 'Erhöhung in diesem Monat' : ''
+                          }}}}});
+        }
+        document.querySelectorAll('[data-stufen]').forEach(el => el.addEventListener('click', oeffneStufen));
+
 }
 function initVerlauf(H) {
 
@@ -1890,7 +1980,7 @@ function kontextJahr(jahr) {
   const pos = ROWS.map(r => r.j).lastIndexOf(jahr);
   const stand = { eg: standAn(entw, "eg", pos), lp: standAn(entw, "lp", pos) };
   const dj = zeilenJahr(ROWS, jahr).slice().sort((a, b) => b.m - a.m).map(r => ({ ...r, warn: monatsWarnung(r) }));
-  return { jahre, kpi, stand, erhoehungen: erhoehungenJeJahr(entw), schicht: baueSchicht(ROWS, jahr), schichtJahre: baueSchichtJahre(ROWS),
+  return { jahre, kpi, stand, stufen: baueStufen(ROWS), erhoehungen: erhoehungenJeJahr(entw), schicht: baueSchicht(ROWS, jahr), schichtJahre: baueSchichtJahre(ROWS),
     monatsZeilen: dj, gesamtVorschlaege: ROWS.reduce((s, r) => s + r.anzahl, 0), gesamtPraemien: ssum(ROWS.map(r => r.summe)),
     drill: baueDrill(ROWS, jahr, jahre), chart: baueChart(ROWS, jahr) };
 }
@@ -1920,14 +2010,14 @@ function render() {
     if (APP.ansicht === "jahr") {
       const c = kontextJahr(APP.jahr);
       chips.innerHTML = chipsHtml(c); host.innerHTML = htmlJahr(c); dlg.innerHTML = DIALOG_HTML;
-      initJahr(c.chart, c.drill, c.schicht, WECKER_SVG);
+      initJahr(c.chart, c.drill, c.schicht, WECKER_SVG, c.stufen);
       centerChip();
     } else if (APP.ansicht === "verlauf") {
       chips.innerHTML = chipsHtml({});
       const [za, zb] = zeitfenster(), b = baueVerlauf(ROWS, za, zb);
       if (!b) { host.innerHTML = '<div class="plate empty">Noch keine Daten vorhanden.</div>'; }
       else {
-        const zr = { keys: ROWS.map(r => r.key), von: ROWS[za].key, bis: ROWS[zb].key, n: zb - za + 1 };
+        const zr = { keys: ROWS.map(r => r.key), von: ROWS[za].key, bis: ROWS[zb].key, n: zb - za + 1, modus: APP.zeitraum.modus };
         host.innerHTML = htmlVerlauf({ vk: b.kpi, schichtJahre: baueSchichtJahre(ROWS.slice(za, zb + 1)), zr }); initVerlauf(b.verlauf); bindVerlauf(); centerChip();
       }
     } else if (APP.ansicht === "vergleich") {
