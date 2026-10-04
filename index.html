@@ -1087,7 +1087,7 @@ function kpiJahr(rows, jahr) {
     leistung: lpS.length ? nn(lpS[lpS.length - 1]) : null, leistung_wechsel: new Set(lpS).size > 1,
     gastro_summe: ssum(dj.map(r => r.gastro)), gastro_schnitt: gastroS.length ? nn(mittel(gastroS)) : null,
     fahrrad_summe: ssum(dj.map(r => r.fahrrad)), fahrrad_schnitt: fahrS.length ? nn(mittel(fahrS)) : null,
-    ultimo_schnitt: ultSchnitt, ultimo_delta: ultVj.length ? pctChange(ultSchnitt, nn(mittel(ultVj))) : null,
+    ultimo_summe: ssum(dj.map(r => r.ultimo)), ultimo_schnitt: ultSchnitt, ultimo_delta: ultVj.length ? pctChange(ultSchnitt, nn(mittel(ultVj))) : null,
     rest_summe: ssum(dj.map(r => r.rest)), rest_schnitt: restS.length ? nn(mittel(restS)) : null,
     zk_ende: zkEnde, zk_vj: zkVj.length > 0, zk_delta: zkEnde != null && zkBasis != null ? nn(zkEnde - zkBasis) : null,
   };
@@ -1156,51 +1156,52 @@ function baueSchichtJahre(rows) {
 function rollend(arr, n, minP) {
   return arr.map((_, i) => { const w = arr.slice(Math.max(0, i - n + 1), i + 1).filter(x => x != null); return w.length >= minP ? w.reduce((a, b) => a + b, 0) / w.length : null; });
 }
-function baueVerlauf(rows) {
+function baueVerlauf(rows, start, end) {
   const real = rows.filter(r => r.status !== "DATEI FEHLT");
   if (!real.length) return null;
-  const dfa = rows;
-  const f = k => dfa.map(r => nn(r[k]));
-  const nettoAvg = rollend(dfa.map(r => r.netto), 12, 6), ultAvg = rollend(dfa.map(r => r.ultimo), 12, 6);
-  const zk = dfa.map(r => r.zeitkonto); const zkDelta = zk.map((v, i) => (i && v != null && zk[i - 1] != null) ? v - zk[i - 1] : null);
+  const a = start == null ? 0 : Math.max(0, start), b = end == null ? rows.length - 1 : Math.min(rows.length - 1, end);
+  const sl = arr => arr.slice(a, b + 1);                       // Reihen werden über ALLE Monate berechnet und dann zugeschnitten
+  const f = k => rows.map(r => nn(r[k]));
+  const nettoAvg = rollend(rows.map(r => r.netto), 12, 6), ultAvg = rollend(rows.map(r => r.ultimo), 12, 6);
+  const zk = rows.map(r => r.zeitkonto); const zkDelta = zk.map((v, i) => (i && v != null && zk[i - 1] != null) ? v - zk[i - 1] : null);
   const verlauf = {
-    labels: dfa.map(r => `${MON[r.m - 1]} ${String(r.j).slice(2)}`),
-    brutto: f("brutto"), netto: f("netto"), netto_avg: nettoAvg.map(nn), ultimo: f("ultimo"), rest: f("rest"), ultimo_avg: ultAvg.map(nn),
-    wochen: f("wochen"), mehr_so: f("mehrH"), gastro: f("gastro"), fahrrad: f("fahrrad"), zeitkonto: f("zeitkonto"), zk_delta: zkDelta.map(nn),
-    netto_quote: f("quote"), ideen: dfa.map(r => r.status === "DATEI FEHLT" ? null : nn(r.summe)), leistung: f("leistung"),
-    urlaub: f("urlaub"), urlaub_vj: f("urlaubVj"), tzug: f("tzug"), eg: dfa.map(r => r.eg),
+    labels: sl(rows.map(r => `${MON[r.m - 1]} ${String(r.j).slice(2)}`)),
+    brutto: sl(f("brutto")), netto: sl(f("netto")), netto_avg: sl(nettoAvg.map(nn)), ultimo: sl(f("ultimo")), rest: sl(f("rest")), ultimo_avg: sl(ultAvg.map(nn)),
+    wochen: sl(f("wochen")), mehr_so: sl(f("mehrH")), gastro: sl(f("gastro")), fahrrad: sl(f("fahrrad")), zeitkonto: sl(f("zeitkonto")), zk_delta: sl(zkDelta.map(nn)),
+    netto_quote: sl(f("quote")), ideen: sl(rows.map(r => r.status === "DATEI FEHLT" ? null : nn(r.summe))), leistung: sl(f("leistung")),
+    urlaub: sl(f("urlaub")), urlaub_vj: sl(f("urlaubVj")), tzug: sl(f("tzug")), eg: sl(rows.map(r => r.eg)),
   };
-  const zkS = zk.filter(x => x != null), nett = dfa.map(r => r.netto).filter(x => x != null), brut = dfa.map(r => r.brutto).filter(x => x != null);
-  const ult = dfa.map(r => r.ultimo).filter(x => x != null);
-  const tail = (a, n) => a.slice(-n), mid = a => a.slice(-24, -12);
-  const u12 = ult.length ? nn(mittel(tail(ult, 12))) : null, uVor = ult.length >= 24 ? nn(mittel(mid(ult))) : null;
-  const n12 = nett.length ? nn(mittel(tail(nett, 12))) : null, nVor = nett.length >= 24 ? nn(mittel(mid(nett))) : null;
-  const entw = baueEntwicklung(dfa);
-  const pos = dfa.length - 1;
-  const egS = standAn(entw, "eg", pos), lpS = standAn(entw, "lp", pos);
+  /* Kennzahlen gelten für den gewählten Zeitraum; der Vergleich geht gegen den gleich langen Zeitraum davor (nur wenn er vollständig vorhanden ist) */
+  const win = rows.slice(a, b + 1), n = win.length, prev = a >= n ? rows.slice(a - n, a) : null;
+  const avgOf = (arr, k) => { const v = arr.map(r => r[k]).filter(x => x != null); return v.length ? nn(mittel(v)) : null; };
+  const nettoZ = avgOf(win, "netto"), ultimoZ = avgOf(win, "ultimo");
+  const bisEnde = rows.slice(0, b + 1).map(r => r.zeitkonto).filter(x => x != null);
+  const vorStart = rows.slice(0, a).map(r => r.zeitkonto).filter(x => x != null), imFenster = win.map(r => r.zeitkonto).filter(x => x != null);
+  const zkEnde = bisEnde.length ? nn(bisEnde[bisEnde.length - 1]) : null;
+  const basis = vorStart.length ? vorStart[vorStart.length - 1] : (imFenster.length > 1 ? imFenster[0] : null);
   const kpi = {
-    zk_aktuell: zkS.length ? nn(zkS[zkS.length - 1]) : null, zk_delta_vm: zkS.length > 1 ? nn(zkS[zkS.length - 1] - zkS[zkS.length - 2]) : null,
-    netto_12: n12, netto_delta: pctChange(n12, nVor), brutto_12: brut.length ? nn(mittel(tail(brut, 12))) : null,
-    hat_ultimo: ult.length > 0, ultimo_12: u12, ultimo_delta: pctChange(u12, uVor),
-    hat_schicht: dfa.some(r => r.wochen != null || r.mehrH != null), hat_posten: dfa.some(r => r.gastro != null || r.fahrrad != null),
-    anzahl_monate: real.length,
-    eg: egS ? egS.wert : null, eg_seit: egS ? egS.seit : null, eg_dauer: egS ? egS.dauer : null, eg_min: egS ? egS.mindestens : false,
-    leistung: lpS ? nn(lpS.wert) : null, leistung_seit: lpS ? lpS.seit : null, leistung_dauer: lpS ? lpS.dauer : null, leistung_min: lpS ? lpS.mindestens : false,
+    n, von: win[0].key, bis: win[n - 1].key, monate_z: win.filter(r => r.real).length,
+    netto_z: nettoZ, netto_delta: prev ? pctChange(nettoZ, avgOf(prev, "netto")) : null,
+    ultimo_z: ultimoZ, ultimo_delta: prev ? pctChange(ultimoZ, avgOf(prev, "ultimo")) : null,
+    brutto_z: avgOf(win, "brutto"),
+    zk_ende: zkEnde, zk_delta_vm: bisEnde.length > 1 ? nn(bisEnde[bisEnde.length - 1] - bisEnde[bisEnde.length - 2]) : null,
+    zk_delta_zeitraum: zkEnde != null && imFenster.length && basis != null ? nn(zkEnde - basis) : null,
+    hat_ultimo: rows.some(r => r.ultimo != null), hat_schicht: rows.some(r => r.wochen != null || r.mehrH != null), hat_posten: rows.some(r => r.gastro != null || r.fahrrad != null),
   };
-  return { verlauf, kpi, entw };
+  return { verlauf, kpi };
 }
 
 /* ---------- Vergleich ---------- */
 const METRIKEN = {
   netto: ["Netto", r => r.netto, "eur"], brutto: ["Brutto", r => r.brutto, "eur"], abzuege: ["Gesetzl. Abzüge", r => r.abz, "eur"],
   ideen: ["Ideenprämien", r => r.status === "DATEI FEHLT" ? null : r.summe, "eur"], netto_quote: ["Netto-Quote", r => r.quote, "pct"],
-  ultimo: ["Ultimo (Grundlohn)", r => r.ultimo, "eur"], rest: ["Rest und Nachzahlung", r => r.rest, "eur"],
+  ultimo: ["Ultimo (Grundlohn)", r => r.ultimo, "eur"], rest: ["Restüberweisung", r => r.rest, "eur"],
   leistung: ["Leistungsprozente", r => r.leistung, "pct"], zeitkonto: ["Zeitkonto", r => r.zeitkonto, "h"],
   mehr_so: ["Mehrarbeit Sonntag", r => r.mehrH, "h"], sonntage_nacht: ["Sonntage Nachtschicht", r => r.sonntage, "n"],
   nachtwochen: ["Nachtschichtwochen", r => r.wochen, "n"], naechte: ["Nächte", r => r.naechte, "n"],
   gastro: ["Gastronomie", r => r.gastro, "eur"], fahrrad: ["Fahrrad (Kosten)", r => r.fahrrad, "eur"],
 };
-const METRIK_GRUPPEN = [["Entgelt", ["netto", "brutto", "abzuege", "ideen", "netto_quote", "ultimo", "rest"]], ["Stufe und Zeitkonto", ["leistung", "zeitkonto"]],
+const METRIK_GRUPPEN = [["Entgelt", ["netto", "brutto", "abzuege", "ideen", "netto_quote", "ultimo", "rest"]], ["Stufe", ["leistung"]], ["Zeitkonto", ["zeitkonto"]],
   ["Mehrarbeit", ["mehr_so", "sonntage_nacht", "nachtwochen", "naechte"]], ["Eigene Kosten", ["gastro", "fahrrad"]]];
 
 function baueVergleich(rows, jahreAlle, args) {
@@ -1279,18 +1280,20 @@ function htmlJahr(c) {
   h += `</div></section>`;
   /* --- Gruppe Entgelt --- */
   h += `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats">`;
-  h += kachel("brutto", "Brutto pro Monat", b && kpi.monate ? big(b / kpi.monate) : "–", `<span class="s">Durchschnitt über ${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")}</span>`);
+  h += kachel("brutto", "Brutto pro Monat", b && kpi.monate ? "Ø " + big(b / kpi.monate) : "–", `<span class="s">Durchschnitt über ${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")}</span>`);
   h += kachel("netto_quote", "Netto-Quote", fPct(kpi.netto_quote), '<span class="s">Netto im Verhältnis zum Brutto</span>');
   h += kachel("ideen", "Ideenprämien", big(kpi.praemien), `<span class="s">${kpi.praemien_anzahl} ${plural(kpi.praemien_anzahl, "Vorschlag", "Vorschläge")}, ${fPct(kpi.praemien_anteil)} vom Brutto</span>`);
   if (kpi.ultimo_schnitt != null) {
-    h += kachel("ultimo", "Ultimo pro Monat", big(kpi.ultimo_schnitt), '<span class="s">Überweisung zum Monatsende</span>', kpi.ultimo_delta != null ? `<span class="s" style="margin-top:6px">${delta(kpi.ultimo_delta, true, "%", " ggü. Vorjahr")}</span>` : "");
-    h += kachel("rest", "Rest und Nachzahlung", big(kpi.rest_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.rest_schnitt)} pro Monat</span>`);
+    h += kachel("ultimo", "Ultimo im Jahr", big(kpi.ultimo_summe), `<span class="s">Ø ${fEur(kpi.ultimo_schnitt)} pro Monat</span>`, kpi.ultimo_delta != null ? `<span class="s" style="margin-top:6px">${delta(kpi.ultimo_delta, true, "%", " ggü. Vorjahr")}</span>` : "");
+    h += kachel("rest", "Restüberweisung", big(kpi.rest_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.rest_schnitt)} pro Monat</span>`);
   }
   h += `</div></section>`;
-  /* --- Gruppe Stufe und Zeitkonto --- */
-  h += `<section class="group"><h2 class="group-title">Stufe und Zeitkonto</h2><div class="stats">
+  /* --- Gruppe Stufe --- */
+  h += `<section class="group"><h2 class="group-title">Stufe</h2><div class="stats">
     <div class="stat"><span class="k">Entgeltgruppe</span><span class="v">${esc(stand.eg ? stand.eg.wert : (kpi.eg || "–"))}</span>${seitBlock(stand.eg, kpi.eg_wechsel ? "Wechsel im Jahr, zuvor " + kpi.eg_erste : "")}</div>
-    <button type="button" class="stat stat-btn" data-drill="leistung" aria-haspopup="dialog"><span class="k">Leistungsprozente</span><span class="v">${fPct(stand.lp ? stand.lp.wert : kpi.leistung)}</span>${seitBlock(stand.lp, kpi.leistung_wechsel ? "Im Jahr geändert" : "")}${peek()}</button>
+    <button type="button" class="stat stat-btn" data-drill="leistung" aria-haspopup="dialog"><span class="k">Leistungs&shy;prozente</span><span class="v">${fPct(stand.lp ? stand.lp.wert : kpi.leistung)}</span>${seitBlock(stand.lp, kpi.leistung_wechsel ? "Im Jahr geändert" : "")}${peek()}</button></div></section>`;
+  /* --- Gruppe Zeitkonto --- */
+  h += `<section class="group"><h2 class="group-title">Zeitkonto</h2><div class="stats">
     <button type="button" class="stat stat-btn" data-drill="zeitkonto" aria-haspopup="dialog"><span class="k">Zeitkonto am Jahresende</span><span class="v">${kpi.zk_ende != null ? sens(esc(deZahl(kpi.zk_ende)) + " h") : "–"}</span>
       ${kpi.zk_delta != null ? `<span class="s">${kpi.zk_vj ? "Seit Jahresbeginn" : "Seit dem ersten Monat mit Daten"}</span><span class="pill" style="margin-top:6px">${kpi.zk_delta >= 0 ? "+" : "–"}${esc(deZahl(Math.abs(kpi.zk_delta)))} h</span>` : '<span class="s">Keine Veränderung berechenbar</span>'}${peek()}</button></div></section>`;
   /* --- Gruppe Mehrarbeit --- */
@@ -1339,13 +1342,22 @@ function htmlJahr(c) {
   return h;
 }
 
+function htmlZeitraum(zr) {
+  const opt = sel => zr.keys.map(k => `<option value="${k}" ${k === sel ? "selected" : ""}>${k}</option>`).join("");
+  return `<section class="plate filter" id="zrPanel" style="margin-bottom:20px"><p class="grp-title">Zeitraum</p>
+    <div class="row-opts"><label>Von <select id="zrVon" aria-label="Zeitraum von">${opt(zr.von)}</select></label><label>bis <select id="zrBis" aria-label="Zeitraum bis">${opt(zr.bis)}</select></label></div>
+    <p class="hint" style="margin:8px 0 0">${zr.n} ${plural(zr.n, "Monat", "Monate")}: ${zr.von} bis ${zr.bis}. Kennzahlen, Tabellen und Diagramme auf dieser Seite gelten für diesen Zeitraum.</p></section>`;
+}
+
 function htmlVerlauf(c) {
   const vk = c.vk, sj = c.schichtJahre;
   const karte = (k, v, s, pill) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div>${pill || ""}</div>`;
-  let h = `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats auto">
-    ${karte("Netto, Ø letzte 12 Monate", big(vk.netto_12), `Zu den 12 Monaten davor ${delta(vk.netto_delta, true, "%")}`)}
-    ${vk.hat_ultimo ? karte("Ultimo, Ø letzte 12 Monate", big(vk.ultimo_12), `Zu den 12 Monaten davor ${delta(vk.ultimo_delta, true, "%")}`) : ""}
-    ${karte("Brutto, Ø letzte 12 Monate", big(vk.brutto_12), `${vk.anzahl_monate} Monate mit Daten insgesamt`)}</div>
+  const vgl = d => d == null ? "Kein vollständiger Zeitraum davor zum Vergleich" : `Zum Zeitraum davor ${delta(d, true, "%")}`;
+  const hStd = x => x == null ? "–" : sens(`${x >= 0 ? "+" : "–"}${esc(deZahl(Math.abs(x)))} h`);
+  let h = htmlZeitraum(c.zr) + `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats auto">
+    ${karte("Netto, Ø im Zeitraum", big(vk.netto_z), vgl(vk.netto_delta))}
+    ${vk.hat_ultimo ? karte("Ultimo, Ø im Zeitraum", big(vk.ultimo_z), vgl(vk.ultimo_delta)) : ""}
+    ${karte("Brutto, Ø im Zeitraum", big(vk.brutto_z), `${vk.monate_z} ${plural(vk.monate_z, "Monat", "Monate")} mit Daten im Zeitraum`)}</div>
     <div class="grid2">
     <section class="plate span2"><h2 class="sec-title" id="bnTitel">Brutto und Netto</h2>
       ${vk.hat_ultimo ? `<div class="seg-tabs" role="group" aria-label="Ansicht wählen"><button type="button" data-bn="bn" aria-pressed="true">Brutto und Netto</button><button type="button" data-bn="ur" aria-pressed="false">Ultimo und Rest</button></div>` : ""}
@@ -1354,17 +1366,18 @@ function htmlVerlauf(c) {
     <section class="plate"><h2 class="sec-title">Netto-Quote</h2><p class="sec-sub">Anteil des Netto am Brutto. Die Achse ist auf den üblichen Wertebereich zugeschnitten.</p><div class="canvas-wrap"><canvas id="hQ"></canvas></div></section>
     <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="hI"></canvas></div></section></div></section>
   <section class="group"><h2 class="group-title">Zeitkonto und Urlaub</h2><div class="stats auto">
-    ${karte("Zeitkonto aktuell", vk.zk_aktuell != null ? sens(esc(deZahl(vk.zk_aktuell)) + " h") : "–", `Zum Vormonat ${delta(vk.zk_delta_vm, true, "h")}`)}</div>
+    ${karte("Zeitkonto am Ende des Zeitraums", vk.zk_ende != null ? sens(esc(deZahl(vk.zk_ende)) + " h") : "–", `Zum Vormonat ${delta(vk.zk_delta_vm, true, "h")}`)}
+    ${karte("Veränderung im Zeitraum", hStd(vk.zk_delta_zeitraum), "Seit Beginn des Zeitraums")}</div>
     <div class="grid2">
     <section class="plate span2"><h2 class="sec-title">Zeitkonto</h2><p class="sec-sub">Stand (Linie, links) und Veränderung zum Vormonat (Balken, rechts).</p><div class="canvas-wrap"><canvas id="hZK"></canvas></div></section>
     <section class="plate span2"><h2 class="sec-title">Urlaubstage</h2><p class="sec-sub">Resturlaub laufendes Jahr, Vorjahr (gestrichelt) und Sonderurlaub T-Zug.</p><div class="canvas-wrap"><canvas id="hU"></canvas></div></section></div></section>`;
   if (vk.hat_schicht || sj) {
     h += `<section class="group"><h2 class="group-title">Mehrarbeit</h2>${sj ? `<div class="stats auto">
-      ${karte("Nachtschichtwochen insgesamt", `${sj.gesamt.wochen}<span class="cents"> Wochen</span>`, `${sj.gesamt.naechte} Nächte seit ${sj.gesamt.seit}`)}
-      ${karte("Mehrarbeit Sonntag insgesamt", `${fZahl(sj.gesamt.mehr_h)}<span class="cents"> Std.</span>`, `Ohne Nachtschicht, seit ${sj.gesamt.seit}`)}</div>` : ""}<div class="grid2">`;
+      ${karte("Nachtschichtwochen im Zeitraum", `${sj.gesamt.wochen}<span class="cents"> Wochen</span>`, `${sj.gesamt.naechte} Nächte`)}
+      ${karte("Mehrarbeit Sonntag im Zeitraum", `${fZahl(sj.gesamt.mehr_h)}<span class="cents"> Std.</span>`, "Ohne Nachtschicht")}</div>` : ""}<div class="grid2">`;
     if (vk.hat_schicht) h += `<section class="plate span2"><h2 class="sec-title">Nachtschichtwochen</h2><p class="sec-sub">Pro Monat, gezählt nach den Sonntagen mit Nachtschicht (Mehrarbeit So. 88 % DNS).</p><div class="canvas-wrap"><canvas id="hNS"></canvas></div></section>
       <section class="plate span2"><h2 class="sec-title">Mehrarbeit Sonntag</h2><p class="sec-sub">Stunden pro Monat an Sonntagen ohne Nachtschicht.</p><div class="canvas-wrap"><canvas id="hMS"></canvas></div></section>`;
-    if (sj) h += `<section class="plate span2"><h2 class="sec-title">Je Jahr</h2><p class="sec-sub">Eine Nachtschichtwoche hat ${sj.naechte_pro_woche} Nächte (Sonntag bis Samstag).</p><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Nachtschichtwochen</th><th class="num">Nächte</th><th class="num">Mehrarbeit Sonntag</th></tr></thead><tbody>
+    if (sj) h += `<section class="plate span2"><h2 class="sec-title">Je Jahr im Zeitraum</h2><p class="sec-sub">Eine Nachtschichtwoche hat ${sj.naechte_pro_woche} Nächte (Sonntag bis Samstag).</p><div class="table-wrap"><table><thead><tr><th>Jahr</th><th class="num">Nachtschichtwochen</th><th class="num">Nächte</th><th class="num">Mehrarbeit Sonntag</th></tr></thead><tbody>
       ${sj.jahre.map(j => `<tr><td>${j.jahr}</td><td class="num">${j.wochen}</td><td class="num">${j.naechte}</td><td class="num">${fZahl(j.mehr_h)} h</td></tr>`).join("")}
       <tr class="summe"><td>Gesamt</td><td class="num">${sj.gesamt.wochen}</td><td class="num">${sj.gesamt.naechte}</td><td class="num">${fZahl(sj.gesamt.mehr_h)} h</td></tr></tbody></table></div></section>`;
     h += `</div></section>`;
@@ -1514,7 +1527,7 @@ function initJahr(D, M, S, WECKER) {
             leistung:    {titel: 'Leistungsprozente pro Monat', typ: 'line', fmt: pct,     farbe: C.leistung, zoom: true, stepped: true},
             zeitkonto:   {titel: 'Zeitkonto pro Monat',         typ: 'line', fmt: stunden, farbe: C.zeit},
             ultimo:      {titel: 'Ultimo pro Monat',            typ: 'bar',  fmt: eur,     farbe: C.netto},
-            rest:        {titel: 'Rest und Nachzahlung pro Monat', typ: 'bar', fmt: eur,  farbe: C.rest},
+            rest:        {titel: 'Restüberweisung pro Monat', typ: 'bar', fmt: eur,  farbe: C.rest},
             gastro:      {titel: 'Gastronomie pro Monat',       typ: 'bar',  fmt: eur,     farbe: C.gastro},
             fahrrad:     {titel: 'Fahrrad, Kosten pro Monat',   typ: 'bar',  fmt: eur,     farbe: C.fahrrad},
             wochen:      {titel: 'Nachtschichtwochen pro Monat',     typ: 'bar',  fmt: zahl1,   farbe: C.nacht},
@@ -1550,12 +1563,12 @@ function initJahr(D, M, S, WECKER) {
                 mitWert = M.monate.map((m, i) => ({m: m, u: u[i], r: r[i]})).filter(x => x.u != null || x.r != null);
                 const sU = mitWert.reduce((a, x) => a + (x.u || 0), 0), sR = mitWert.reduce((a, x) => a + (x.r || 0), 0);
                 titel = 'Ultimo und Rest pro Monat ' + M.jahr;
-                sub = 'Ultimo plus Rest und Nachzahlung ergeben das Netto.';
-                if (mitWert.length) stats = [['Ultimo, Durchschnitt', eur(sU / mitWert.length)], ['Rest und Nachzahlung, Summe', eur(sR)],
+                sub = 'Ultimo plus Restüberweisung ergeben das Netto.';
+                if (mitWert.length) stats = [['Ultimo, Durchschnitt', eur(sU / mitWert.length)], ['Restüberweisung, Summe', eur(sR)],
                                              ['Rest-Anteil am Netto', (sU + sR) ? pct(sR / (sU + sR) * 100) : '–']];
                 typ = 'bar';
                 datasets = [{label: 'Ultimo', data: u, backgroundColor: C.netto, borderRadius: 5},
-                            {label: 'Rest und Nachzahlung', data: r, backgroundColor: C.rest, borderRadius: 5}];
+                            {label: 'Restüberweisung', data: r, backgroundColor: C.rest, borderRadius: 5}];
                 optionen = {
                     interaction: {mode: 'index', intersect: false},
                     scales: {x: {stacked: true, ...noGridX}, y: {stacked: true, ...noBorder, ticks: {callback: v => eur(v)}}},
@@ -1792,7 +1805,7 @@ function initVerlauf(H) {
                 type: 'bar',
                 data: {labels: schnitt(H.labels), datasets: [
                     {type: 'bar', label: 'Ultimo', data: schnitt(H.ultimo), backgroundColor: C.netto, borderRadius: 4, order: 1},
-                    {type: 'bar', label: 'Rest und Nachzahlung', data: schnitt(H.rest), backgroundColor: C.rest, borderRadius: 4, order: 1},
+                    {type: 'bar', label: 'Restüberweisung', data: schnitt(H.rest), backgroundColor: C.rest, borderRadius: 4, order: 1},
                     {type: 'line', label: 'Ultimo Ø 12 Monate', data: schnitt(H.ultimo_avg), spanGaps: true, order: 0,
                      ...line(C.brutto, {borderDash: [6, 5], borderWidth: 2})}
                 ]},
@@ -1857,7 +1870,7 @@ function initVergleich(V) {
 
 }
 /* ===== Anwendung: Zustand, Ansichtenwechsel, PDF-Einlesen im Browser (pdf.js), Demo ===== */
-const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [], demo: false, merken: false, schutz: false, gesperrt: false, schluessel: null };
+const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [], demo: false, merken: false, schutz: false, gesperrt: false, schluessel: null, zeitraum: { modus: "alles", von: null, bis: null } };
 let ROWS = [];
 const $ = s => document.querySelector(s);
 
@@ -1887,8 +1900,10 @@ function chipsHtml(ctx) {
     return `<nav class="chips" aria-label="Jahr">${ctx.jahre.map(j => { const er = ctx.erhoehungen[j];
       return `<a class="chip ${j === APP.jahr ? "active" : ""}" data-keepscroll data-jahr="${j}" href="#" ${er ? `title="Erhöhung: ${esc(er.map(e => e.text).join(", "))}" aria-label="${j}, mit Erhöhung"` : ""}>${er ? '<span class="raise" aria-hidden="true">▲</span>' : ""}${j}</a>`; }).join("")}</nav>`;
   }
-  if (APP.ansicht === "verlauf")
-    return `<nav class="chips" aria-label="Zeitraum"><button class="chip" data-range="12" type="button">12 Monate</button><button class="chip" data-range="24" type="button">24 Monate</button><button class="chip active" data-range="0" type="button">Alles</button></nav>`;
+  if (APP.ansicht === "verlauf") {
+    const m = APP.zeitraum.modus, chip = (k, t) => `<button class="chip ${m === k ? "active" : ""}" data-zr="${k}" type="button">${t}</button>`;
+    return `<nav class="chips" aria-label="Zeitraum">${chip("12", "12 Monate")}${chip("24", "24 Monate")}${chip("alles", "Alles")}${chip("frei", "Zeitraum")}</nav>`;
+  }
   return "";
 }
 
@@ -1908,9 +1923,13 @@ function render() {
       initJahr(c.chart, c.drill, c.schicht, WECKER_SVG);
       centerChip();
     } else if (APP.ansicht === "verlauf") {
-      const b = baueVerlauf(ROWS); chips.innerHTML = chipsHtml({});
+      chips.innerHTML = chipsHtml({});
+      const [za, zb] = zeitfenster(), b = baueVerlauf(ROWS, za, zb);
       if (!b) { host.innerHTML = '<div class="plate empty">Noch keine Daten vorhanden.</div>'; }
-      else { host.innerHTML = htmlVerlauf({ vk: b.kpi, schichtJahre: baueSchichtJahre(ROWS) }); initVerlauf(b.verlauf); }
+      else {
+        const zr = { keys: ROWS.map(r => r.key), von: ROWS[za].key, bis: ROWS[zb].key, n: zb - za + 1 };
+        host.innerHTML = htmlVerlauf({ vk: b.kpi, schichtJahre: baueSchichtJahre(ROWS.slice(za, zb + 1)), zr }); initVerlauf(b.verlauf); bindVerlauf(); centerChip();
+      }
     } else if (APP.ansicht === "vergleich") {
       chips.innerHTML = "";
       const asc = jahre.slice().sort((a, b) => a - b);
@@ -1929,14 +1948,39 @@ function render() {
   window.scrollTo(0, y);
 }
 function centerChip() {
-  const aktiv = document.querySelector(".top .chip.active[data-keepscroll]");
+  const aktiv = document.querySelector(".top .chip.active");
   if (aktiv) { const row = aktiv.parentElement, rb = row.getBoundingClientRect(), ab = aktiv.getBoundingClientRect(); row.scrollLeft += (ab.left - rb.left) - (rb.width - ab.width) / 2; }
 }
+
+/* ---------- Zeitfilter im Verlauf ---------- */
+function zeitfenster() {
+  const n = ROWS.length, z = APP.zeitraum;
+  if (z.modus === "12" || z.modus === "24") return [Math.max(0, n - Number(z.modus)), n - 1];
+  if (z.modus === "frei" && z.von && z.bis) {
+    let a = ROWS.findIndex(r => r.key === z.von), b = ROWS.findIndex(r => r.key === z.bis);
+    if (a < 0) a = 0; if (b < 0) b = n - 1;
+    return a <= b ? [a, b] : [b, a];
+  }
+  return [0, n - 1];
+}
+function bindVerlauf() {
+  const von = $("#zrVon"), bis = $("#zrBis"); if (!von || !bis) return;
+  const aendern = () => { APP.zeitraum = { modus: "frei", von: von.value, bis: bis.value }; render(); };
+  von.addEventListener("change", aendern); bis.addEventListener("change", aendern);
+}
+const setzeZeitraumZurueck = () => { APP.zeitraum = { modus: "alles", von: null, bis: null }; };
 
 /* ---------- Bedienung ---------- */
 document.addEventListener("click", ev => {
   const nav = ev.target.closest("[data-nav]");
   if (nav) { ev.preventDefault(); APP.ansicht = nav.dataset.nav; window.scrollTo(0, 0); render(); return; }
+  const zr = ev.target.closest("[data-zr]");
+  if (zr) {
+    ev.preventDefault(); const modus = zr.dataset.zr;
+    if (modus === "frei") { const [a, b] = zeitfenster(); APP.zeitraum = { modus: "frei", von: ROWS[a].key, bis: ROWS[b].key }; window.scrollTo(0, 0); }
+    else APP.zeitraum = { modus, von: null, bis: null };
+    render(); return;
+  }
   const chip = ev.target.closest("a.chip[data-jahr]");
   if (chip) { ev.preventDefault(); APP.jahr = +chip.dataset.jahr; render(); }
 });
@@ -1947,7 +1991,7 @@ function bindDaten() {
     const txt = APP.demo ? "Die Demo beenden?" : (APP.merken ? "Alle geladenen Daten löschen, auch die auf diesem Gerät gespeicherten?" : "Alle geladenen Daten aus diesem Fenster löschen?");
     if (!confirm(txt)) return;
     if (!APP.demo) { lsDel(LS_DATEN); APP.schutz = false; APP.gesperrt = false; APP.schluessel = null; }
-    APP.eintraege = []; APP.hinweise = []; APP.jahr = null; APP.demo = false; berechne(); APP.ansicht = "start"; render();
+    APP.eintraege = []; APP.hinweise = []; APP.jahr = null; APP.demo = false; setzeZeitraumZurueck(); berechne(); APP.ansicht = "start"; render();
   });
   const m = $("#merkenChk"); if (m) m.addEventListener("change", async () => { if (!(await setzeMerken(m.checked))) m.checked = APP.merken; render(); });
   const sc = $("#schutzChk"); if (sc) sc.addEventListener("change", async () => { if (!(await setzeSchutz(sc.checked))) sc.checked = APP.schutz; render(); });
@@ -2167,7 +2211,7 @@ async function ladeSicherung(file) {
     const { eintraege, verworfen } = bereinigeEintraege(p.eintraege);
     if (!eintraege.length) throw new Error("Die Sicherung enthält keine verwertbaren Monate.");
     if (APP.eintraege.length && !APP.demo && !confirm("Die Sicherung ersetzt die aktuell geladenen Daten. Fortfahren?")) return;
-    APP.eintraege = eintraege; APP.demo = false; APP.jahr = null; APP.hinweise = hinweiseAus(p);
+    APP.eintraege = eintraege; APP.demo = false; APP.jahr = null; APP.hinweise = hinweiseAus(p); setzeZeitraumZurueck();
     if (verworfen) APP.hinweise.push(`Sicherung: ${verworfen} ungültige Einträge wurden übersprungen.`);
     berechne(); await speichereLokal(); APP.ansicht = "jahr";
     status(`Sicherung geladen: ${eintraege.length} ${plural(eintraege.length, "Monat", "Monate")}.`, 5000); render();
@@ -2302,7 +2346,7 @@ function demoEintraege() {
   }
   return out;
 }
-function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Alle Zahlen sind erfunden."]; APP.demo = true; APP.jahr = null; APP.ansicht = "jahr"; berechne(); render(); }
+function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Alle Zahlen sind erfunden."]; APP.demo = true; APP.jahr = null; APP.ansicht = "jahr"; setzeZeitraumZurueck(); berechne(); render(); }
 
 /* ---------- Start ---------- */
 function startApp() {
