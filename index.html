@@ -384,6 +384,18 @@
                      font-size: .8rem; line-height: 1.4; word-break: break-word; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
         #fehlerBox[hidden] { display: none; }
         #fehlerBox button { float: right; margin-left: 10px; border: 0; background: rgba(255,255,255,.2); color: #fff; border-radius: 8px; padding: 2px 8px; font: inherit; }
+        /* Passwortabfrage */
+        .pw-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 250; background: rgba(8, 16, 30, .6); display: flex; align-items: flex-end; justify-content: center; }
+        .pw-box { background: var(--plate); color: var(--ink); width: 100%; max-width: 520px; box-sizing: border-box; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+                  border-radius: 28px 28px 0 0; max-height: 92vh; overflow: auto; box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, .5); }
+        @media (min-width: 760px) { .pw-overlay { align-items: center; } .pw-box { border-radius: 28px; padding-bottom: 20px; } }
+        .pw-feld { display: block; width: 100%; box-sizing: border-box; margin: 8px 0; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line);
+                   background: var(--bg); color: var(--ink); font: inherit; font-size: 16px; }
+        .pw-fehler { color: #B3261E; margin: 6px 0 0; font-size: .9rem; }
+        html[data-theme="dark"] .pw-fehler { color: #FF8A80; }
+        .pw-fehler[hidden] { display: none; }
+        .pw-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .pw-sek { background: transparent; color: var(--ink); border: 1px solid var(--line); }
         /* Ersatz für Browser ohne <dialog> (iOS vor 15.4) */
         dialog.dlg-fallback { display: none; }
         dialog.dlg-fallback[open] { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 100; margin: 0; box-shadow: 0 0 0 100vmax rgba(8, 16, 30, .55); }
@@ -1381,10 +1393,12 @@ function htmlVergleich(c) {
   return h;
 }
 
-function htmlStart() {
+function htmlStart(c) {
+  c = c || {};
   const knopf = "display:inline-block;cursor:pointer;margin-top:8px;background:transparent;color:var(--ink);border:1px solid var(--line)";
   return `<section class="slip"><div class="slip-top"><div class="slip-head"><h1 class="year">Entgelt</h1><span class="pill">Offline-App</span></div>
     <p class="lede" style="margin:10px 0 18px">Lies deine Entgeltabrechnungen (PDF) ein und sieh Netto, Abzüge, Zeitkonto, Mehrarbeit und mehr übersichtlich ausgewertet.</p>
+    ${c.gesperrt ? `<button type="button" class="btn" id="entsperrenBtn" style="margin-bottom:10px;display:block">Gemerkte Daten entsperren</button>` : ""}
     <label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">PDF-Abrechnungen auswählen</label>
     <button type="button" class="btn" id="demoBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Demo mit Beispieldaten</button>
     <label class="btn" for="sicherungInput" style="${knopf}">Sicherung laden</label>
@@ -1409,11 +1423,18 @@ function htmlDaten(c) {
       <button type="button" class="btn" id="loeschBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Alle Daten löschen</button>
       <p class="hint" style="margin-top:12px">${c.merken ? "Die Daten sind auf diesem Gerät gespeichert und bleiben nach dem Neuladen erhalten." : "Die Daten liegen nur im Arbeitsspeicher dieses Fensters. Beim Schließen oder Neuladen der Seite sind sie weg."}</p></div>
     <h2 class="sec-title section-gap" style="margin-bottom:8px">Merken und Sichern</h2>
-    <div class="plate"><label class="check" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="merkenChk" ${c.merken ? "checked" : ""} ${c.speicherOk ? "" : "disabled"} style="margin-top:4px">
+    <div class="plate">
+      ${c.gesperrt ? `<div class="ruf-banner" style="margin:0 0 14px"><div><b>Gemerkte Daten sind gesperrt</b><span>Sie sind mit einem Passwort geschützt. Neue Daten werden erst nach dem Entsperren gespeichert.</span><button type="button" class="btn" id="entsperrenBtn" style="margin-top:10px">Entsperren</button></div></div>` : ""}
+      <label class="check" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="merkenChk" ${c.merken ? "checked" : ""} ${c.speicherOk ? "" : "disabled"} style="margin-top:4px">
       <span><b>Auf diesem Gerät merken</b><br><span class="hint">Speichert die ausgelesenen Werte (nicht die PDFs) im Browser dieses Geräts. Nichts wird hochgeladen. Auf fremden oder geteilten Geräten besser ausgeschaltet lassen. ${c.speicherOk ? "" : "Hier ist Speichern nicht möglich, zum Beispiel im privaten Modus."}</span></span></label>
+      <label class="check" style="display:flex;gap:10px;align-items:flex-start;margin-top:12px"><input type="checkbox" id="schutzChk" ${c.schutz ? "checked" : ""} ${(c.merken && c.krypto && !c.gesperrt && monate.length) ? "" : "disabled"} style="margin-top:4px">
+      <span><b>Gemerkte Daten mit Passwort schützen</b><br><span class="hint">${c.krypto ? `Verschlüsselt den Speicher im Browser (AES-256). Das Passwort wird bei jedem Öffnen der App abgefragt, es gibt keine Wiederherstellung. Zuerst „Auf diesem Gerät merken“ einschalten und Daten laden.` : "Verschlüsselung ist in diesem Browser nicht verfügbar (sie braucht eine https-Adresse)."}</span></span></label>
+      <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+      <label class="check" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="sichernPw" ${c.krypto ? "checked" : "disabled"} style="margin-top:4px">
+      <span><b>Sicherungsdatei mit Passwort verschlüsseln</b> (empfohlen)<br><span class="hint">Eine unverschlüsselte Datei kann jeder lesen, der sie bekommt, zum Beispiel über Cloud oder Messenger.</span></span></label>
       <div style="margin-top:14px"><button type="button" class="btn" id="sichernBtn" ${monate.length ? "" : "disabled"}>Als Datei sichern</button>
       <label class="btn" for="sicherungInput" style="${aus};margin-left:8px">Datei laden</label></div>
-      <p class="hint" style="margin-top:12px">Die Sicherungsdatei enthält deine Werte unverschlüsselt. Bewahre sie sicher auf und gib sie nicht weiter. Safari auf dem iPhone kann gemerkte Daten nach etwa sieben Tagen ohne Besuch löschen, auch das Löschen des Browserverlaufs entfernt sie.</p></div>`;
+      <p class="hint" style="margin-top:12px">Ohne Passwort ist die Datei nicht zu öffnen. Wähle mindestens 10 Zeichen und notiere es dir sicher. Safari auf dem iPhone kann gemerkte Daten nach etwa sieben Tagen ohne Besuch löschen, auch das Löschen des Browserverlaufs entfernt sie.</p></div>`;
   }
   h += `${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
   <h2 class="sec-title section-gap" style="margin-bottom:8px">Hinweise beim Einlesen</h2>
@@ -1843,7 +1864,7 @@ function initVergleich(V) {
 
 }
 /* ===== Anwendung: Zustand, Ansichtenwechsel, PDF-Einlesen im Browser (pdf.js), Demo ===== */
-const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [], demo: false, merken: false };
+const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [], demo: false, merken: false, schutz: false, gesperrt: false, schluessel: null };
 let ROWS = [];
 const $ = s => document.querySelector(s);
 
@@ -1885,7 +1906,7 @@ function render() {
   document.querySelectorAll(".dock [data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === APP.ansicht));
   dlg.innerHTML = "";
   try {
-    if (!ROWS.length || APP.ansicht === "start") { APP.ansicht = ROWS.length ? "jahr" : "start"; if (!ROWS.length) { host.innerHTML = htmlStart(); chips.innerHTML = ""; bindStart(); return; } }
+    if (!ROWS.length || APP.ansicht === "start") { APP.ansicht = ROWS.length ? "jahr" : "start"; if (!ROWS.length) { host.innerHTML = htmlStart({ gesperrt: APP.gesperrt }); chips.innerHTML = ""; bindStart(); return; } }
     const jahre = jahreAbsteigend(ROWS);
     if (!jahre.includes(APP.jahr)) APP.jahr = jahre[0];
     if (APP.ansicht === "jahr") {
@@ -1906,7 +1927,7 @@ function render() {
       bindVergleich();
       if (v.sel.length && v.monate.length) initVergleich(v);
     } else {
-      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich() }); bindDaten();
+      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich(), krypto: KRYPTO_OK, gesperrt: APP.gesperrt, schutz: APP.schutz }); bindDaten();
     }
   } catch (e) {
     console.error(e);
@@ -1926,16 +1947,18 @@ document.addEventListener("click", ev => {
   const chip = ev.target.closest("a.chip[data-jahr]");
   if (chip) { ev.preventDefault(); APP.jahr = +chip.dataset.jahr; render(); }
 });
-function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); }
+function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); const e = $("#entsperrenBtn"); if (e) e.addEventListener("click", entsperreSpeicher); }
 function bindDaten() {
   const b = $("#loeschBtn");
   if (b) b.addEventListener("click", () => {
     const txt = APP.demo ? "Die Demo beenden?" : (APP.merken ? "Alle geladenen Daten löschen, auch die auf diesem Gerät gespeicherten?" : "Alle geladenen Daten aus diesem Fenster löschen?");
     if (!confirm(txt)) return;
-    if (!APP.demo) lsDel(LS_DATEN);
+    if (!APP.demo) { lsDel(LS_DATEN); APP.schutz = false; APP.gesperrt = false; APP.schluessel = null; }
     APP.eintraege = []; APP.hinweise = []; APP.jahr = null; APP.demo = false; berechne(); APP.ansicht = "start"; render();
   });
-  const m = $("#merkenChk"); if (m) m.addEventListener("change", () => { if (!setzeMerken(m.checked)) m.checked = APP.merken; render(); });
+  const m = $("#merkenChk"); if (m) m.addEventListener("change", async () => { if (!(await setzeMerken(m.checked))) m.checked = APP.merken; render(); });
+  const sc = $("#schutzChk"); if (sc) sc.addEventListener("change", async () => { if (!(await setzeSchutz(sc.checked))) sc.checked = APP.schutz; render(); });
+  const en = $("#entsperrenBtn"); if (en) en.addEventListener("click", entsperreSpeicher);
   const sb = $("#sichernBtn"); if (sb) sb.addEventListener("click", sicherungHerunterladen);
 }
 function bindVergleich() {
@@ -1944,6 +1967,73 @@ function bindVergleich() {
     ev.preventDefault(); const fd = new FormData(f);
     APP.vg = { jahre: fd.getAll("jahre").map(Number), monate: fd.getAll("monate").map(Number), kennzahl: fd.get("kennzahl") || "netto", gleich: fd.has("gleich") };
     render();
+  });
+}
+
+/* ---------- Verschlüsselung (AES-256-GCM, Schlüssel per PBKDF2 aus dem Passwort) ---------- */
+const KRYPTO_OK = !!(window.crypto && crypto.subtle && window.TextEncoder && window.atob);
+const KDF_ITER = 600000, MIN_PW = 10;
+const AAD = KRYPTO_OK ? new TextEncoder().encode("entgelt-offline-v1") : null;
+const b64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+async function ableiten(passwort, salz, iter) {
+  salz = salz || crypto.getRandomValues(new Uint8Array(16)); iter = iter || KDF_ITER;
+  const basis = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(passwort).normalize("NFC")), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt: salz, iterations: iter, hash: "SHA-256" }, basis, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  return { key, salz, iter };
+}
+async function verschluessle(klartext, sk) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: AAD }, sk.key, new TextEncoder().encode(klartext)));
+  return { format: "entgelt-offline", version: 1, verschluesselt: true, kdf: "PBKDF2-SHA256", iterationen: sk.iter, salz: b64(sk.salz), iv: b64(iv), daten: b64(ct) };
+}
+async function entschluessle(p, passwort) {
+  if (!KRYPTO_OK) throw new Error("Dieser Browser kann nicht entschlüsseln (https nötig).");
+  if (p.version > 1) throw new Error("Die Datei stammt aus einer neueren Version der App.");
+  if (p.kdf !== "PBKDF2-SHA256" || !Number.isInteger(p.iterationen) || p.iterationen < 100000 || p.iterationen > 2000000 ||
+      typeof p.salz !== "string" || typeof p.iv !== "string" || typeof p.daten !== "string") throw new Error("Die verschlüsselte Datei ist unvollständig oder von einer anderen Version.");
+  let salz, iv, ct;
+  try { salz = unb64(p.salz); iv = unb64(p.iv); ct = unb64(p.daten); } catch (e) { throw new Error("Die verschlüsselte Datei ist beschädigt."); }
+  if (iv.length !== 12 || salz.length < 8 || salz.length > 64 || ct.length < 17) throw new Error("Die verschlüsselte Datei ist beschädigt.");
+  const sk = await ableiten(passwort, salz, p.iterationen);
+  let klar;
+  try { klar = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: AAD }, sk.key, ct); }
+  catch (e) { throw new Error("Falsches Passwort oder beschädigte Datei."); }
+  return { text: new TextDecoder().decode(klar), schluessel: sk };
+}
+
+/* ---------- Passwortabfrage (eigenes Fenster, funktioniert in jedem Browser) ---------- */
+function fragePasswort(opt) {
+  return new Promise(resolve => {
+    const ov = document.createElement("div"); ov.className = "pw-overlay"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true");
+    const extra = (opt.extra || []).map(e => `<button type="button" class="btn pw-sek" data-aktion="${esc(e.aktion)}">${esc(e.text)}</button>`).join("");
+    const attr = 'autocapitalize="off" autocorrect="off" spellcheck="false"';
+    ov.innerHTML = `<form class="pw-box"><h2 class="sec-title" style="margin-top:0">${esc(opt.titel)}</h2><p class="hint" style="margin:0 0 8px">${esc(opt.text || "")}</p>
+      <input type="password" class="pw-feld" id="pwEin" placeholder="Passwort" autocomplete="${opt.neu ? "new-password" : "current-password"}" ${attr}>
+      ${opt.neu ? `<input type="password" class="pw-feld" id="pwEin2" placeholder="Passwort wiederholen" autocomplete="new-password" ${attr}>` : ""}
+      <p class="pw-fehler" id="pwFehler" role="alert" hidden></p>
+      <div class="pw-knoepfe"><button type="submit" class="btn" id="pwOk">${esc(opt.ok || "OK")}</button><button type="button" class="btn pw-sek" data-aktion="abbruch">Abbrechen</button>${extra}</div></form>`;
+    document.body.appendChild(ov);
+    const form = ov.querySelector("form"), ein = ov.querySelector("#pwEin"), ein2 = ov.querySelector("#pwEin2"), fehlerEl = ov.querySelector("#pwFehler"), okBtn = ov.querySelector("#pwOk");
+    const zeigeFehler = t => { fehlerEl.textContent = t; fehlerEl.hidden = !t; };
+    const taste = e => { if (e.key === "Escape") { e.stopPropagation(); fertig(null); } };
+    const fertig = r => { document.removeEventListener("keydown", taste, true); ov.remove(); resolve(r); };
+    document.addEventListener("keydown", taste, true);
+    ov.addEventListener("click", e => { if (e.target === ov) fertig(null); });
+    ov.querySelectorAll("[data-aktion]").forEach(b => b.addEventListener("click", () => fertig(b.dataset.aktion === "abbruch" ? null : { aktion: b.dataset.aktion })));
+    form.addEventListener("submit", async ev => {
+      ev.preventDefault(); zeigeFehler("");
+      const pw = ein.value.normalize("NFC");               // gleiche Zeichen, egal wie die Tastatur Umlaute zusammensetzt
+      if (!pw) { zeigeFehler("Bitte ein Passwort eingeben."); return; }
+      if (opt.neu) {
+        if (pw.length < MIN_PW) { zeigeFehler(`Das Passwort braucht mindestens ${MIN_PW} Zeichen.`); return; }
+        if (pw !== ein2.value.normalize("NFC")) { zeigeFehler("Die beiden Passwörter sind nicht gleich."); return; }
+      }
+      okBtn.disabled = true; const alt = okBtn.textContent; okBtn.textContent = "Bitte warten …";
+      try { fertig({ wert: await opt.verarbeite(pw) }); }
+      catch (e) { zeigeFehler((e && e.message) || "Das hat nicht geklappt."); okBtn.disabled = false; okBtn.textContent = alt; ein.value = ""; if (ein2) ein2.value = ""; ein.focus(); }
+    });
+    setTimeout(() => ein.focus(), 60);
   });
 }
 
@@ -1958,6 +2048,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e
 function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
 let speicherTest = null;
 function speicherMoeglich() { if (speicherTest === null) { speicherTest = lsSet("entgelt_test", "1"); lsDel("entgelt_test"); } return speicherTest; }
+const hinweiseAus = p => Array.isArray(p && p.hinweise) ? p.hinweise.filter(h => typeof h === "string").slice(0, 200) : [];
 
 /* Fremde oder gespeicherte Daten prüfen: nur bekannte Felder, richtige Typen, jeder Monat einmal */
 function bereinigeEintraege(liste) {
@@ -1974,41 +2065,90 @@ function bereinigeEintraege(liste) {
   return { eintraege: out, verworfen };
 }
 function paket() {
-  return { format: "entgelt-offline", version: 1, gespeichert: new Date().toISOString(), eintraege: APP.eintraege,
-    hinweise: APP.hinweise.filter(h => typeof h === "string").slice(0, 200) };
+  return { format: "entgelt-offline", version: 1, gespeichert: new Date().toISOString(), eintraege: APP.eintraege, hinweise: hinweiseAus({ hinweise: APP.hinweise }) };
 }
-function speichereLokal() {
-  if (!APP.merken || APP.demo) return true;
+async function speichereLokal() {
+  if (!APP.merken || APP.demo || APP.gesperrt) return true;
   if (!APP.eintraege.length) { lsDel(LS_DATEN); return true; }
-  const ok = lsSet(LS_DATEN, JSON.stringify(paket()));
+  let text;
+  try { text = JSON.stringify(APP.schluessel ? await verschluessle(JSON.stringify(paket()), APP.schluessel) : paket()); }
+  catch (e) { status("Verschlüsseln fehlgeschlagen.", 6000); return false; }
+  const ok = lsSet(LS_DATEN, text);
   if (!ok) status("Speichern auf diesem Gerät nicht möglich (Speicher voll oder gesperrt).", 6000);
   return ok;
 }
+/* Beim Start (synchron): unverschlüsselte Daten sofort laden; geschützte Daten bleiben gesperrt, bis das Passwort eingegeben ist */
 function ladeGespeichert() {
   APP.merken = lsGet(LS_FLAG) === "1";
-  if (!APP.merken) return 0;
-  const roh = lsGet(LS_DATEN); if (!roh) return 0;
-  try {
-    const p = JSON.parse(roh); const { eintraege } = bereinigeEintraege(p && p.eintraege);
-    if (!eintraege.length) return 0;
-    APP.eintraege = eintraege; APP.hinweise = Array.isArray(p.hinweise) ? p.hinweise.filter(h => typeof h === "string").slice(0, 200) : [];
-    berechne(); APP.ansicht = "jahr"; return eintraege.length;
-  } catch (e) { lsDel(LS_DATEN); APP.hinweise.push("Die gespeicherten Daten waren beschädigt und wurden entfernt."); return 0; }
+  if (!APP.merken) return { anzahl: 0 };
+  const roh = lsGet(LS_DATEN); if (!roh) return { anzahl: 0 };
+  let p; try { p = JSON.parse(roh); } catch (e) { lsDel(LS_DATEN); APP.hinweise.push("Die gespeicherten Daten waren beschädigt und wurden entfernt."); return { anzahl: 0 }; }
+  if (p && p.verschluesselt === true) { APP.schutz = true; APP.gesperrt = true; return { anzahl: 0, gesperrt: true }; }
+  const { eintraege } = bereinigeEintraege(p && p.eintraege);
+  if (!eintraege.length) return { anzahl: 0 };
+  APP.eintraege = eintraege; APP.hinweise = hinweiseAus(p); berechne(); APP.ansicht = "jahr";
+  return { anzahl: eintraege.length };
 }
-function setzeMerken(an) {
+async function entsperreSpeicher() {
+  let p = null; try { p = JSON.parse(lsGet(LS_DATEN) || "null"); } catch (e) {}
+  if (!p || p.verschluesselt !== true) { APP.gesperrt = false; return 0; }
+  const r = await fragePasswort({ titel: "Gemerkte Daten entsperren", text: "Deine gemerkten Daten sind mit einem Passwort geschützt.", ok: "Entsperren",
+    extra: [{ aktion: "weiter", text: "Ohne gemerkte Daten fortfahren" }, { aktion: "loeschen", text: "Gemerkte Daten löschen" }],
+    verarbeite: async pw => {
+      const { text, schluessel } = await entschluessle(p, pw);
+      const inner = JSON.parse(text); return { eintraege: bereinigeEintraege(inner && inner.eintraege).eintraege, hinweise: hinweiseAus(inner), schluessel };
+    } });
+  if (!r || r.aktion === "weiter") { status("Die gemerkten Daten bleiben gesperrt. Unter „Daten“ kannst du sie entsperren. Neue Daten werden bis dahin nicht gespeichert.", 7000); return 0; }
+  if (r.aktion === "loeschen") {
+    if (confirm("Die gemerkten Daten endgültig von diesem Gerät löschen?")) { lsDel(LS_DATEN); APP.gesperrt = false; APP.schutz = false; APP.schluessel = null; status("Die gemerkten Daten wurden gelöscht.", 5000); render(); }
+    return 0;
+  }
+  const w = r.wert; APP.schluessel = w.schluessel; APP.gesperrt = false;
+  if (APP.demo) { APP.eintraege = w.eintraege; APP.demo = false; APP.hinweise = w.hinweise; }
+  else { const da = new Set(APP.eintraege.map(e => e.monat)); for (const e of w.eintraege) if (!da.has(e.monat)) APP.eintraege.push(e); APP.hinweise.push(...w.hinweise); }
+  berechne(); await speichereLokal(); APP.jahr = null; if (ROWS.length) APP.ansicht = "jahr";
+  status(`Gemerkte Daten entsperrt: ${w.eintraege.length} ${plural(w.eintraege.length, "Monat", "Monate")}.`, 5000); render();
+  return w.eintraege.length;
+}
+async function setzeMerken(an) {
   if (an) {
     if (!lsSet(LS_FLAG, "1")) { status("Speichern im Browser ist hier nicht möglich (privater Modus oder gesperrt).", 6000); return false; }
     APP.merken = true;
-    if (!speichereLokal()) { APP.merken = false; lsDel(LS_FLAG); return false; }
+    if (!(await speichereLokal())) { APP.merken = false; lsDel(LS_FLAG); return false; }
     status("Gespeichert. Die Daten bleiben jetzt auf diesem Gerät.", 4000);
   } else {
-    APP.merken = false; lsDel(LS_FLAG); lsDel(LS_DATEN); status("Gespeicherte Daten wurden von diesem Gerät entfernt.", 4000);
+    if (APP.gesperrt && !confirm("Die gesperrten, gemerkten Daten endgültig löschen?")) return false;
+    APP.merken = false; APP.schutz = false; APP.gesperrt = false; APP.schluessel = null; lsDel(LS_FLAG); lsDel(LS_DATEN);
+    status("Gemerkte Daten wurden von diesem Gerät entfernt.", 4000);
   }
   return true;
 }
+async function setzeSchutz(an) {
+  if (an) {
+    if (!KRYPTO_OK || !APP.merken || APP.gesperrt || !APP.eintraege.length) return false;
+    const r = await fragePasswort({ titel: "Gemerkte Daten schützen", neu: true, ok: "Schützen",
+      text: `Wähle ein Passwort mit mindestens ${MIN_PW} Zeichen. Du gibst es bei jedem Öffnen der App ein. Es gibt keine Wiederherstellung: Wer es vergisst, kann die Daten nur über die PDFs oder eine Sicherung neu aufbauen.`,
+      verarbeite: pw => ableiten(pw) });
+    if (!r || !r.wert) return false;
+    APP.schluessel = r.wert; APP.schutz = true;
+    if (!(await speichereLokal())) { APP.schluessel = null; APP.schutz = false; return false; }
+    status("Die gemerkten Daten sind jetzt mit Passwort geschützt.", 5000); return true;
+  }
+  if (!confirm("Passwortschutz entfernen? Die gemerkten Daten liegen danach unverschlüsselt im Browser.")) return false;
+  APP.schluessel = null; APP.schutz = false; await speichereLokal(); status("Der Passwortschutz wurde entfernt.", 4000); return true;
+}
 const istIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 async function sicherungHerunterladen() {
-  const name = `entgelt-sicherung-${new Date().toISOString().slice(0, 10)}.json`, text = JSON.stringify(paket());
+  const chk = $("#sichernPw"), verschl = !!(chk && chk.checked && KRYPTO_OK);
+  let text;
+  if (verschl) {
+    const r = await fragePasswort({ titel: "Sicherung verschlüsseln", neu: true, ok: "Verschlüsseln und sichern",
+      text: `Wähle ein Passwort mit mindestens ${MIN_PW} Zeichen. Ohne das Passwort lässt sich die Datei nicht öffnen, und es gibt keine Wiederherstellung.`,
+      verarbeite: async pw => JSON.stringify(await verschluessle(JSON.stringify(paket()), await ableiten(pw))) });
+    if (!r || typeof r.wert !== "string") return;
+    text = r.wert;
+  } else text = JSON.stringify(paket());
+  const name = `entgelt-sicherung${verschl ? "-verschluesselt" : ""}-${new Date().toISOString().slice(0, 10)}.json`;
   try {                                    // iPhone: Teilen-Fenster mit "In Dateien sichern"
     if (istIos() && navigator.canShare && window.File) {
       const datei = new File([text], name, { type: "application/json" });
@@ -2022,16 +2162,21 @@ async function sicherungHerunterladen() {
 }
 async function ladeSicherung(file) {
   try {
-    const p = JSON.parse(await file.text());
+    let p = JSON.parse(await file.text());
+    if (p && p.format === "entgelt-offline" && p.verschluesselt === true) {
+      if (!KRYPTO_OK) throw new Error("Verschlüsselte Sicherungen brauchen einen Browser mit Verschlüsselung (https).");
+      const r = await fragePasswort({ titel: "Sicherung entsperren", text: "Diese Sicherung ist mit einem Passwort geschützt.", ok: "Entsperren", verarbeite: async pw => (await entschluessle(p, pw)).text });
+      if (!r || typeof r.wert !== "string") return;
+      p = JSON.parse(r.wert);
+    }
     if (!p || p.format !== "entgelt-offline" || !Array.isArray(p.eintraege)) throw new Error("Das ist keine Sicherung dieser App.");
     if (p.version > 1) throw new Error("Die Sicherung stammt aus einer neueren Version der App.");
     const { eintraege, verworfen } = bereinigeEintraege(p.eintraege);
     if (!eintraege.length) throw new Error("Die Sicherung enthält keine verwertbaren Monate.");
     if (APP.eintraege.length && !APP.demo && !confirm("Die Sicherung ersetzt die aktuell geladenen Daten. Fortfahren?")) return;
-    APP.eintraege = eintraege; APP.demo = false; APP.jahr = null;
-    APP.hinweise = (Array.isArray(p.hinweise) ? p.hinweise.filter(h => typeof h === "string").slice(0, 200) : []);
+    APP.eintraege = eintraege; APP.demo = false; APP.jahr = null; APP.hinweise = hinweiseAus(p);
     if (verworfen) APP.hinweise.push(`Sicherung: ${verworfen} ungültige Einträge wurden übersprungen.`);
-    berechne(); speichereLokal(); APP.ansicht = "jahr";
+    berechne(); await speichereLokal(); APP.ansicht = "jahr";
     status(`Sicherung geladen: ${eintraege.length} ${plural(eintraege.length, "Monat", "Monate")}.`, 5000); render();
   } catch (e) {
     const t = e instanceof SyntaxError ? "Die Datei ist keine gültige Sicherung." : (e && e.message || String(e));
@@ -2084,7 +2229,7 @@ function systemInfo() {
   const dlg = !!(typeof HTMLDialogElement !== "undefined" && HTMLDialogElement.prototype.showModal) && !window.__dialogErsatz;
   return [`App-Version: ${APP_VERSION}`, `Browser: ${navigator.userAgent}`, `Adresse: ${location.protocol}//${location.host || "(lokale Datei)"}`,
     `Diagramme: ${window.__keinChart ? "nicht geladen" : "geladen"}`, `PDF-Bibliothek: ${window.pdfjsLib ? "geladen" : "wird beim ersten Einlesen geladen"}`,
-    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`, `Daten merken: ${APP.merken ? "an" : "aus"}`].join("\n");
+    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`, `Daten merken: ${APP.merken ? "an" : "aus"}`, `Verschlüsselung: ${KRYPTO_OK ? "verfügbar" : "nicht verfügbar"}`, `Passwortschutz: ${APP.gesperrt ? "gesperrt" : APP.schutz ? "an" : "aus"}`].join("\n");
 }
 
 /* ---------- PDF lesen (pdf.js liefert Textstücke mit Position; wir machen daraus Wörter) ---------- */
@@ -2135,7 +2280,7 @@ async function ladeDateien(files) {
     catch (e) { hinweise.push(`${liste[i].name}: konnte nicht gelesen werden (${e && e.message || e})`); }
   }
   APP.eintraege.push(...neu); APP.hinweise.push(...hinweise);
-  berechne(); speichereLokal();
+  berechne(); await speichereLokal();
   status(neu.length ? `${neu.length} ${plural(neu.length, "Monat", "Monate")} eingelesen${hinweise.length ? `, ${hinweise.length} Hinweis${hinweise.length === 1 ? "" : "e"} unter „Daten“` : ""}.` : "Keine Abrechnung erkannt. Details unter „Daten“.", 6000);
   if (!ROWS.length) APP.ansicht = "daten"; else if (APP.ansicht === "start" || APP.ansicht === "daten") APP.ansicht = "jahr";
   if (neu.length) APP.jahr = null;
@@ -2172,11 +2317,12 @@ function startApp() {
   inp.addEventListener("change", () => { if (inp.files && inp.files.length) ladeDateien(inp.files); });
   const sin = $("#sicherungInput");
   sin.addEventListener("change", () => { if (sin.files && sin.files.length) ladeSicherung(sin.files[0]); });
-  const geladen = ladeGespeichert();
+  const gespeichert = ladeGespeichert();
   window.addEventListener("dragover", e => e.preventDefault());
   window.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) ladeDateien(e.dataTransfer.files); });
   render();
-  if (geladen) status(`Gespeicherte Daten geladen: ${geladen} ${plural(geladen, "Monat", "Monate")}.`, 5000);
+  if (gespeichert.anzahl) status(`Gespeicherte Daten geladen: ${gespeichert.anzahl} ${plural(gespeichert.anzahl, "Monat", "Monate")}.`, 5000);
+  if (gespeichert.gesperrt) entsperreSpeicher();
 }
 window.__app = { APP, render, ladeDemo, nimmAuf, berechne, ladeDateien, itemsZuWoertern, rows: () => ROWS };
 
