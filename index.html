@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#ECF1EF" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#101F33" media="(prefers-color-scheme: dark)">
+    <meta name="app-version" content="2026-10-05-update">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Entgelt (Offline-App)</title>
 
@@ -1471,6 +1472,30 @@ function htmlStart(c) {
     <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
 }
 
+function htmlVersion(c) {
+  const u = c.update || {}, zeit = u.zeit ? u.zeit.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
+  let t = `<h2 class="sec-title section-gap" style="margin-bottom:8px">Version und Updates</h2><div class="plate"><p style="margin:0 0 10px"><b>Diese App:</b> Version ${esc(c.version)}</p>`;
+  if (!c.swOk) return t + `<p class="hint" style="margin:0">Die Update-Prüfung gibt es nur auf der veröffentlichten Seite (https), nicht bei einer lokal geöffneten Datei.</p></div>`;
+  t += `<button type="button" class="btn" id="updateBtn" ${u.status === "pruefe" ? "disabled" : ""}>${u.status === "pruefe" ? "Prüfe …" : "Auf Update prüfen"}</button>`;
+  if (u.status === "aktuell") t += `<p class="hint" style="margin:10px 0 0">Du hast die neueste Version (${esc(u.neu)}). Geprüft um ${esc(zeit)} Uhr.</p>`;
+  if (u.status === "neu") t += `<p style="margin:12px 0 8px"><b>Neue Version verfügbar:</b> ${esc(u.neu)}</p><button type="button" class="btn" id="aktualisierenBtn">Jetzt aktualisieren</button>
+      <p class="hint" style="margin:8px 0 0">Die Seite wird neu geladen. Daten, die nicht auf dem Gerät gemerkt sind, gehen dabei verloren, sichere sie vorher als Datei.</p>`;
+  if (u.status === "fehler") t += `<p class="hint" style="margin:10px 0 0">Prüfen nicht möglich: ${esc(u.meldung)}</p>`;
+  return t + `</div>`;
+}
+
+function htmlDatenort() {
+  return `<details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Wo liegen meine Daten?</summary>
+    <ul class="hint" style="margin:10px 0 0;padding-left:18px">
+      <li><b>PDFs:</b> werden nie gespeichert und nicht hochgeladen.</li>
+      <li><b>Ausgelesene Werte:</b> nur im Arbeitsspeicher dieser Seite, bis du sie schließt oder neu lädst.</li>
+      <li><b>Mit „Auf diesem Gerät merken“:</b> im Speicher des Browsers (localStorage) für diese Adresse, auf deinem Gerät und nicht auf einem Server. Auf Wunsch mit Passwort verschlüsselt. Der Browser und die App vom Home-Bildschirm haben getrennte Speicher.</li>
+      <li><b>Sicherungsdatei:</b> dort, wo du sie ablegst, zum Beispiel in Dateien, iCloud oder Downloads.</li>
+      <li><b>Zwischenspeicher der App:</b> nur Programmcode und Bibliotheken für den Offline-Start, keine Daten.</li>
+      <li><b>Einstellungen</b> (hell oder dunkel, Verwischen): ebenfalls im Speicher des Browsers.</li>
+    </ul></details>`;
+}
+
 function htmlApp(c) {
   const knopf = "background:transparent;color:var(--ink);border:1px solid var(--line)";
   let t = `<h2 class="sec-title section-gap" style="margin-bottom:8px">Als App nutzen</h2><div class="plate">`;
@@ -1512,10 +1537,12 @@ function htmlDaten(c) {
       <label class="btn" for="sicherungInput" style="${aus};margin-left:8px">Datei laden</label></div>
       <p class="hint" style="margin-top:12px">Ohne Passwort ist die Datei nicht zu öffnen. Wähle mindestens 10 Zeichen und notiere es dir sicher. Safari auf dem iPhone kann gemerkte Daten nach etwa sieben Tagen ohne Besuch löschen, auch das Löschen des Browserverlaufs entfernt sie.</p></div>`;
   }
+  h += htmlVersion(c);
   h += htmlApp(c);
   h += `${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
   <h2 class="sec-title section-gap" style="margin-bottom:8px">Hinweise beim Einlesen</h2>
   <div class="plate">${c.hinweise.length ? `<ul class="loglist">${c.hinweise.map(t => `<li><span>${esc(t)}</span></li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Keine Auffälligkeiten.</p>'}</div>
+  ${htmlDatenort()}
   <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
   return h;
 }
@@ -2053,7 +2080,7 @@ function render() {
       bindVergleich();
       if (v.sel.length && v.monate.length) initVergleich(v);
     } else {
-      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich(), krypto: KRYPTO_OK, gesperrt: APP.gesperrt, schutz: APP.schutz, standalone: istStandalone(), ios: istIos(), installierbar: !!installAngebot, swOk: swMoeglich() }); bindDaten();
+      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich(), krypto: KRYPTO_OK, gesperrt: APP.gesperrt, schutz: APP.schutz, standalone: istStandalone(), ios: istIos(), installierbar: !!installAngebot, swOk: swMoeglich(), update: APP.update, version: APP_VERSION }); bindDaten();
     }
   } catch (e) {
     console.error(e);
@@ -2111,6 +2138,8 @@ function bindDaten() {
   const sc = $("#schutzChk"); if (sc) sc.addEventListener("change", async () => { if (!(await setzeSchutz(sc.checked))) sc.checked = APP.schutz; render(); });
   const en = $("#entsperrenBtn"); if (en) en.addEventListener("click", entsperreSpeicher);
   const sb = $("#sichernBtn"); if (sb) sb.addEventListener("click", sicherungHerunterladen);
+  const ub = $("#updateBtn"); if (ub) ub.addEventListener("click", pruefeUpdate);
+  const ab = $("#aktualisierenBtn"); if (ab) ab.addEventListener("click", aktualisiere);
   const ib = $("#installBtn"); if (ib) ib.addEventListener("click", installieren);
   const ob = $("#offlineBtn"); if (ob) ob.addEventListener("click", offlineVorbereiten);
 }
@@ -2346,7 +2375,7 @@ function status(text, dauerMs) {
 }
 
 /* ---------- Bibliotheken nachladen (mehrere Ausweichadressen) ---------- */
-const APP_VERSION = "2026-10-04-gh";
+const APP_VERSION = "2026-10-05-update";
 function ladeSkript(urls) {
   return new Promise((resolve, reject) => {
     let i = 0;
@@ -2401,6 +2430,29 @@ async function installieren() {
   if (!installAngebot) return;
   installAngebot.prompt(); try { await installAngebot.userChoice; } catch (e) {}
   installAngebot = null; render();
+}
+
+/* ---------- Version und Aktualisierung ---------- */
+async function pruefeUpdate() {
+  APP.update = { status: "pruefe" }; render();
+  try {
+    const r = await fetch(`index.html?_=${Date.now()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("Server antwortet mit " + r.status);
+    const m = /<meta name="app-version" content="([^"]+)"/.exec(await r.text());
+    if (!m) throw new Error("In der Antwort steht keine Versionsangabe");
+    APP.update = { status: m[1] === APP_VERSION ? "aktuell" : "neu", neu: m[1], zeit: new Date() };
+  } catch (e) {
+    const netz = navigator.onLine === false || e instanceof TypeError;     // fetch meldet fehlende Verbindung als TypeError ("Failed to fetch")
+    APP.update = { status: "fehler", meldung: netz ? "Der Server ist nicht erreichbar. Prüfe deine Internetverbindung." : String((e && e.message) || e), zeit: new Date() };
+  }
+  if (APP.ansicht === "daten") render();
+}
+async function aktualisiere() {
+  if (APP.eintraege.length && !APP.demo && !APP.merken &&
+      !confirm("Beim Aktualisieren wird die Seite neu geladen. Daten, die nicht auf diesem Gerät gemerkt sind, gehen dabei verloren. Sichere sie vorher als Datei, wenn du sie behalten willst. Jetzt trotzdem aktualisieren?")) return;
+  try { sessionStorage.setItem("entgelt_aktualisiert", (APP.update && APP.update.neu) || "1"); } catch (e) {}
+  try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+  location.replace(location.pathname + "?v=" + Date.now());      // neue Adresse = kein veralteter Browser-Zwischenspeicher
 }
 
 /* ---------- Systemprüfung (hilft, wenn etwas auf einem Gerät nicht läuft) ---------- */
@@ -2500,8 +2552,10 @@ function startApp() {
   const gespeichert = ladeGespeichert();
   window.addEventListener("dragover", e => e.preventDefault());
   window.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) ladeDateien(e.dataTransfer.files); });
+  if (/[?&]v=\d+/.test(location.search)) { try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {} }   // Hilfsparameter der Aktualisierung entfernen
   registriereSw();
   render();
+  try { const n = sessionStorage.getItem("entgelt_aktualisiert"); if (n) { sessionStorage.removeItem("entgelt_aktualisiert"); status(`Die App wurde aktualisiert (Version ${APP_VERSION}).`, 6000); } } catch (e) {}
   if (gespeichert.anzahl) status(`Gespeicherte Daten geladen: ${gespeichert.anzahl} ${plural(gespeichert.anzahl, "Monat", "Monate")}.`, 5000);
   if (gespeichert.gesperrt) entsperreSpeicher();
 }

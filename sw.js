@@ -1,6 +1,6 @@
 /* Zwischenspeicher für die App: Seite und Symbole (Kern) und die Bibliotheken von Fremdadressen (Diagramme, PDF-Auslese).
    Damit startet die App auch ohne Internet, sobald sie einmal geladen wurde. Es werden nie Nutzerdaten gespeichert. */
-const VERSION = "2026-10-05-1";
+const VERSION = "2026-10-05-2";
 const KERN = "entgelt-kern-" + VERSION, LIBS = "entgelt-libs";
 const KERN_DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
 
@@ -16,7 +16,8 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     if (req.mode === "navigate") {                // Seite: erst das Netz (damit Neuerungen ankommen), sonst der Zwischenspeicher
-      e.respondWith(fetch(req).then(res => { if (res.ok) { const kopie = res.clone(); caches.open(KERN).then(c => c.put("./index.html", kopie)); } return res; })
+      e.respondWith(fetch(req.url, { cache: "no-cache" }).then(res => {   // "no-cache": immer beim Server nachfragen, nie eine veraltete Kopie des Browsers nehmen
+        res = res; if (res.ok) { const kopie = res.clone(); caches.open(KERN).then(c => c.put("./index.html", kopie)); } return res; })
         .catch(() => caches.match("./index.html").then(r => r || caches.match("./"))));
       return;
     }
