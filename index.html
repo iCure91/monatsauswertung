@@ -3,8 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="format-detection" content="telephone=no">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Entgelt">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ECF1EF" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#101F33" media="(prefers-color-scheme: dark)">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#ECF1EF">
     <title>Entgelt (Offline-App)</title>
 
     <!-- Darstellung (hell/dunkel) vor dem ersten Rendern setzen, damit nichts aufblitzt -->
@@ -1458,9 +1466,23 @@ function htmlStart(c) {
     <label class="btn" for="sicherungInput" style="${knopf}">Sicherung laden</label>
     <p class="hint" style="margin-top:14px">Du kannst mehrere PDFs auf einmal auswählen, am besten alle Monate eines Zeitraums.</p></div>
     <div class="perf"></div><div class="slip-bottom"><div class="hero-label" style="margin-top:0">Deine Daten bleiben bei dir</div>
-    <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Standardmäßig wird nichts gespeichert: Schließt oder lädst du die Seite neu, sind die Daten weg. Unter „Daten“ kannst du sie auf diesem Gerät merken oder als Datei sichern.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li></ul></div></section>
+    <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Standardmäßig wird nichts gespeichert: Schließt oder lädst du die Seite neu, sind die Daten weg. Unter „Daten“ kannst du sie auf diesem Gerät merken oder als Datei sichern.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li><li>Tipp: Unter „Daten“ steht, wie du die Seite als App auf den Home-Bildschirm legst.</li></ul></div></section>
     <p class="foot">Für die PDF-Auswertung und die Diagramme lädt die Seite zwei Bibliotheken aus dem Internet nach.</p>
     <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
+}
+
+function htmlApp(c) {
+  const knopf = "background:transparent;color:var(--ink);border:1px solid var(--line)";
+  let t = `<h2 class="sec-title section-gap" style="margin-bottom:8px">Als App nutzen</h2><div class="plate">`;
+  if (c.standalone) t += `<p class="hint" style="margin:0 0 10px">Du nutzt die App gerade vom Home-Bildschirm.</p>`;
+  else if (c.ios) t += `<p class="hint" style="margin:0 0 10px">Öffne diese Seite in Safari, tippe auf das Teilen-Symbol und wähle „Zum Home-Bildschirm“.</p>`;
+  else if (c.installierbar) t += `<button type="button" class="btn" id="installBtn" style="margin-bottom:10px">Als App installieren</button>`;
+  else t += `<p class="hint" style="margin:0 0 10px">Im Browsermenü (drei Punkte oder Teilen) findest du „App installieren“ oder „Zum Startbildschirm“.</p>`;
+  t += `<p class="hint" style="margin:0 0 12px">Die App auf dem Home-Bildschirm hat einen eigenen Speicher. Gemerkte Daten aus dem Browser sind dort nicht vorhanden. Lade sie dort über eine Sicherungsdatei oder die PDFs neu.</p>`;
+  t += c.swOk ? `<button type="button" class="btn" id="offlineBtn" style="${knopf}">Für Offline-Nutzung vorbereiten</button>
+      <p class="hint" style="margin:8px 0 0">Lädt einmalig die Bibliotheken für Diagramme und PDF-Auslese (etwa 2 MB) auf dein Gerät. Danach startet die App auch ohne Internet.</p>`
+    : `<p class="hint" style="margin:0">Offline-Nutzung gibt es nur auf der veröffentlichten Seite (https), nicht bei einer lokal geöffneten Datei.</p>`;
+  return t + `</div>`;
 }
 
 function htmlDaten(c) {
@@ -1490,6 +1512,7 @@ function htmlDaten(c) {
       <label class="btn" for="sicherungInput" style="${aus};margin-left:8px">Datei laden</label></div>
       <p class="hint" style="margin-top:12px">Ohne Passwort ist die Datei nicht zu öffnen. Wähle mindestens 10 Zeichen und notiere es dir sicher. Safari auf dem iPhone kann gemerkte Daten nach etwa sieben Tagen ohne Besuch löschen, auch das Löschen des Browserverlaufs entfernt sie.</p></div>`;
   }
+  h += htmlApp(c);
   h += `${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
   <h2 class="sec-title section-gap" style="margin-bottom:8px">Hinweise beim Einlesen</h2>
   <div class="plate">${c.hinweise.length ? `<ul class="loglist">${c.hinweise.map(t => `<li><span>${esc(t)}</span></li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Keine Auffälligkeiten.</p>'}</div>
@@ -2004,7 +2027,8 @@ function render() {
   document.querySelectorAll(".dock [data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === APP.ansicht));
   dlg.innerHTML = "";
   try {
-    if (!ROWS.length || APP.ansicht === "start") { APP.ansicht = ROWS.length ? "jahr" : "start"; if (!ROWS.length) { host.innerHTML = htmlStart({ gesperrt: APP.gesperrt }); chips.innerHTML = ""; bindStart(); return; } }
+    // Ohne Daten zeigt jede Ansicht die Startseite, nur "Daten" bleibt erreichbar (dort stehen Installation, Sicherung und Offline-Nutzung)
+    if ((!ROWS.length && APP.ansicht !== "daten") || APP.ansicht === "start") { APP.ansicht = ROWS.length ? "jahr" : "start"; if (!ROWS.length) { host.innerHTML = htmlStart({ gesperrt: APP.gesperrt }); chips.innerHTML = ""; bindStart(); return; } }
     const jahre = jahreAbsteigend(ROWS);
     if (!jahre.includes(APP.jahr)) APP.jahr = jahre[0];
     if (APP.ansicht === "jahr") {
@@ -2029,7 +2053,7 @@ function render() {
       bindVergleich();
       if (v.sel.length && v.monate.length) initVergleich(v);
     } else {
-      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich(), krypto: KRYPTO_OK, gesperrt: APP.gesperrt, schutz: APP.schutz }); bindDaten();
+      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich(), krypto: KRYPTO_OK, gesperrt: APP.gesperrt, schutz: APP.schutz, standalone: istStandalone(), ios: istIos(), installierbar: !!installAngebot, swOk: swMoeglich() }); bindDaten();
     }
   } catch (e) {
     console.error(e);
@@ -2087,6 +2111,8 @@ function bindDaten() {
   const sc = $("#schutzChk"); if (sc) sc.addEventListener("change", async () => { if (!(await setzeSchutz(sc.checked))) sc.checked = APP.schutz; render(); });
   const en = $("#entsperrenBtn"); if (en) en.addEventListener("click", entsperreSpeicher);
   const sb = $("#sichernBtn"); if (sb) sb.addEventListener("click", sicherungHerunterladen);
+  const ib = $("#installBtn"); if (ib) ib.addEventListener("click", installieren);
+  const ob = $("#offlineBtn"); if (ob) ob.addEventListener("click", offlineVorbereiten);
 }
 function bindVergleich() {
   const f = $("#vgForm"); if (!f) return;
@@ -2350,13 +2376,40 @@ function ladePdfJs() {
   return pdfJsLaden;
 }
 
+/* ---------- App auf dem Home-Bildschirm und Offline-Start ---------- */
+const CHART_URL = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js";
+let installAngebot = null;
+const istStandalone = () => !!((window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true);
+const swMoeglich = () => "serviceWorker" in navigator && /^https?:$/.test(location.protocol);
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installAngebot = e; if (APP.ansicht === "daten") render(); });
+window.addEventListener("appinstalled", () => { installAngebot = null; status("Die App wurde installiert.", 4000); });
+function registriereSw() {
+  if (!swMoeglich()) return;
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", e => {
+    const d = e.data; if (!d || d.typ !== "libs-fertig") return;
+    status(d.ok ? "Bereit: Die App startet jetzt auch ohne Internet." : `Nur ${d.anzahl} von ${d.von} Bibliotheken geladen. Prüfe die Internetverbindung und versuche es erneut.`, 7000);
+  });
+}
+function offlineVorbereiten() {
+  const c = swMoeglich() && navigator.serviceWorker.controller;
+  if (!c) { status("Die Seite ist noch nicht bereit. Öffne sie einmal neu und versuche es dann erneut.", 7000); return; }
+  status("Lade Bibliotheken für die Offline-Nutzung …");
+  c.postMessage({ typ: "libs", urls: [CHART_URL, PDFJS_QUELLEN[0][0], PDFJS_QUELLEN[0][1]] });
+}
+async function installieren() {
+  if (!installAngebot) return;
+  installAngebot.prompt(); try { await installAngebot.userChoice; } catch (e) {}
+  installAngebot = null; render();
+}
+
 /* ---------- Systemprüfung (hilft, wenn etwas auf einem Gerät nicht läuft) ---------- */
 function systemInfo() {
   let ls = "ja"; try { localStorage.setItem("t", "1"); localStorage.removeItem("t"); } catch (e) { ls = "nein"; }
   const dlg = !!(typeof HTMLDialogElement !== "undefined" && HTMLDialogElement.prototype.showModal) && !window.__dialogErsatz;
   return [`App-Version: ${APP_VERSION}`, `Browser: ${navigator.userAgent}`, `Adresse: ${location.protocol}//${location.host || "(lokale Datei)"}`,
     `Diagramme: ${window.__keinChart ? "nicht geladen" : "geladen"}`, `PDF-Bibliothek: ${window.pdfjsLib ? "geladen" : "wird beim ersten Einlesen geladen"}`,
-    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`, `Daten merken: ${APP.merken ? "an" : "aus"}`, `Verschlüsselung: ${KRYPTO_OK ? "verfügbar" : "nicht verfügbar"}`, `Passwortschutz: ${APP.gesperrt ? "gesperrt" : APP.schutz ? "an" : "aus"}`].join("\n");
+    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`, `Daten merken: ${APP.merken ? "an" : "aus"}`, `Verschlüsselung: ${KRYPTO_OK ? "verfügbar" : "nicht verfügbar"}`, `Passwortschutz: ${APP.gesperrt ? "gesperrt" : APP.schutz ? "an" : "aus"}`, `Als App geöffnet: ${istStandalone() ? "ja" : "nein"}`, `Offline-Speicher (Service Worker): ${!swMoeglich() ? "nicht möglich (lokale Datei oder kein https)" : (navigator.serviceWorker.controller ? "aktiv" : "wird vorbereitet")}`].join("\n");
 }
 
 /* ---------- PDF lesen (pdf.js liefert Textstücke mit Position; wir machen daraus Wörter) ---------- */
@@ -2447,6 +2500,7 @@ function startApp() {
   const gespeichert = ladeGespeichert();
   window.addEventListener("dragover", e => e.preventDefault());
   window.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) ladeDateien(e.dataTransfer.files); });
+  registriereSw();
   render();
   if (gespeichert.anzahl) status(`Gespeicherte Daten geladen: ${gespeichert.anzahl} ${plural(gespeichert.anzahl, "Monat", "Monate")}.`, 5000);
   if (gespeichert.gesperrt) entsperreSpeicher();
