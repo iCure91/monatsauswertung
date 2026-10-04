@@ -5,7 +5,7 @@
     <meta name="format-detection" content="telephone=no">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#ECF1EF">
-    <title>Entgeld (Offline-App)</title>
+    <title>Entgelt (Offline-App)</title>
 
     <!-- Darstellung (hell/dunkel) vor dem ersten Rendern setzen, damit nichts aufblitzt -->
     <script>
@@ -416,7 +416,7 @@
                         <rect x="16" y="0" width="6" height="16" rx="3" fill="#D6336C"/>
                         <rect x="23.5" y="0" width="2.5" height="16" rx="1.25" fill="#E3A008"/>
                     </svg>
-                    Entgeld
+                    Entgelt
                 </div>
                 <div class="top-actions">
                     <button class="icon-btn" id="blurBtn" type="button" aria-label="Werte verwischen" aria-pressed="false" title="Werte verwischen">
@@ -1322,15 +1322,20 @@ function htmlJahr(c) {
   h += `<div class="grid2" style="margin-top:28px">
     <section class="plate span2"><h2 class="sec-title">Aufteilung pro Monat</h2><p class="sec-sub">Netto, gesetzliche Abzüge und Sonstiges ergeben zusammen das Brutto.</p><div class="canvas-wrap tall"><canvas id="cAufteilung"></canvas></div></section>
     <section class="plate"><h2 class="sec-title">Netto-Quote</h2><p class="sec-sub">Anteil des Netto am Brutto je Monat. Die Achse ist auf den üblichen Wertebereich zugeschnitten, extreme Ausreißer liegen außerhalb.</p><div class="canvas-wrap"><canvas id="cQuoten"></canvas></div></section>
-    <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="cPraemien"></canvas></div></section>
+    <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="cPraemien"></canvas></div>
+      <p class="hint" style="margin:12px 0 0">Ideenprogramm über alle geladenen Monate: ${c.gesamtVorschlaege} ${plural(c.gesamtVorschlaege, "Vorschlag", "Vorschläge")}, ${fEur(c.gesamtPraemien)}.</p></section>
     <section class="plate span2"><h2 class="sec-title">Zeitkonto, Resturlaub und Sonderurlaub</h2><p class="sec-sub">Zeitkonto in Stunden (links), Urlaubstage (rechts). Gestrichelt: Resturlaub aus dem Vorjahr.</p><div class="canvas-wrap"><canvas id="cZeit"></canvas></div></section></div>`;
   /* --- Tabelle --- */
-  h += `<h2 class="sec-title section-gap" style="margin-bottom:12px">Monate im Detail</h2><div class="table-wrap"><table><thead><tr><th>Monat</th><th class="num">Brutto</th><th class="num">Netto</th><th class="num">Abzüge</th><th class="num">Netto-Quote</th><th class="num">Ideen</th><th class="num">Anzahl</th><th>EG</th><th class="num">Leistung</th><th class="num">Zeitkonto</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>`;
+  const tage = x => { let t = deZahl(x, 1); if (t.endsWith(",0")) t = t.slice(0, -2); return t; };
+  h += `<h2 class="sec-title section-gap" style="margin-bottom:12px">Monate im Detail</h2><div class="table-wrap"><table><thead><tr><th>Monat</th><th class="num">Brutto</th><th class="num">Netto</th><th class="num">Abzüge</th><th class="num">Netto-Quote</th><th class="num">VVs</th><th class="num">Ideen</th><th class="num">Zeitkonto</th><th class="num">Resturlaub</th><th class="num">T-Zug</th><th>Status</th><th>Hinweis</th></tr></thead><tbody>`;
   for (const r of c.monatsZeilen) {
-    const st = r.status === "OK" ? '<span class="st ok">OK</span>' : r.status === "KEIN BONUS" ? '<span class="st null">Kein Bonus</span>' : '<span class="st fehlt">Datei fehlt</span>';
-    h += `<tr class="${r.status === "DATEI FEHLT" ? "fehlt" : ""}"><td>${r.key}${r.ruf ? ` <span title="Rufbereitschaft">${wecker(13)}</span>` : ""}</td><td class="num">${fEur(r.brutto)}</td><td class="num">${fEur(r.netto)}</td><td class="num">${fEur(r.abz)}</td><td class="num">${fPct(r.quote)}</td><td class="num">${fZahl(r.summe)}</td><td class="num">${r.anzahl}</td><td class="sens">${esc(r.eg || "–")}</td><td class="num">${fPct(r.leistung)}</td><td class="num">${fZahl(r.zeitkonto)}</td><td>${st}</td><td>${r.warn ? `<span class="warnchip">${esc(r.warn)}</span>` : ""}</td></tr>`;
+    const fehlt = !r.real, st = fehlt ? '<span class="st fehlt">DATEI FEHLT</span>' : '<span class="st ok">OK</span>';
+    const urlaub = r.urlaub != null ? sens(esc(tage(r.urlaub)) + (r.urlaubVj ? ` (+${esc(tage(r.urlaubVj))} VJ)` : "")) : "–";
+    h += `<tr class="${fehlt ? "fehlt" : ""}"><td>${r.key}${r.ruf ? ` <span title="Rufbereitschaft">${wecker(13)}</span>` : ""}</td><td class="num">${fEur(r.brutto)}</td><td class="num">${fEur(r.netto)}</td><td class="num">${fEur(r.abz)}</td><td class="num">${fPct(r.quote)}</td>
+      <td class="num">${fehlt ? "–" : sens(String(r.anzahl))}</td><td class="num">${fehlt ? "–" : fEur(r.summe)}</td><td class="num">${r.zeitkonto != null ? sens(esc(deZahl(r.zeitkonto)) + " h") : "–"}</td>
+      <td class="num">${urlaub}</td><td class="num">${r.tzug != null ? sens(esc(tage(r.tzug))) : "–"}</td><td>${st}</td><td>${r.warn ? `<span class="warnchip">${esc(r.warn)}</span>` : ""}</td></tr>`;
   }
-  h += `</tbody></table></div><p class="foot">Ideenprogramm über alle geladenen Monate: ${c.gesamtVorschlaege} ${plural(c.gesamtVorschlaege, "Vorschlag", "Vorschläge")}, ${fEur(c.gesamtPraemien)}. Alle Werte stammen aus deinen PDFs und liegen nur in diesem Browserfenster.</p>`;
+  h += `</tbody></table></div><p class="foot">Alle Werte stammen aus deinen PDFs und bleiben auf deinem Gerät.</p>`;
   return h;
 }
 
@@ -1348,12 +1353,9 @@ function htmlVerlauf(c) {
       <div class="canvas-wrap tall" id="bnWrap"><canvas id="hBN"></canvas></div><div class="canvas-wrap tall" id="urWrap" hidden><canvas id="hUR"></canvas></div></section>
     <section class="plate"><h2 class="sec-title">Netto-Quote</h2><p class="sec-sub">Anteil des Netto am Brutto. Die Achse ist auf den üblichen Wertebereich zugeschnitten.</p><div class="canvas-wrap"><canvas id="hQ"></canvas></div></section>
     <section class="plate"><h2 class="sec-title">Ideenprämien</h2><p class="sec-sub">Summe pro Monat.</p><div class="canvas-wrap"><canvas id="hI"></canvas></div></section></div></section>
-  <section class="group"><h2 class="group-title">Stufe und Zeitkonto</h2><div class="stats auto">
-    ${karte("Zeitkonto aktuell", vk.zk_aktuell != null ? sens(esc(deZahl(vk.zk_aktuell)) + " h") : "–", `Zum Vormonat ${delta(vk.zk_delta_vm, true, "h")}`)}
-    ${karte("Entgeltgruppe aktuell", esc(vk.eg || "–"), vk.eg_seit ? `Unverändert seit ${vk.eg_min ? "mindestens " : ""}${esc(vk.eg_seit)}` : "Noch nicht eingelesen", vk.eg_dauer ? `<span class="pill">${esc(vk.eg_dauer)}</span>` : "")}
-    ${karte("Leistungsprozente aktuell", fPct(vk.leistung), vk.leistung_seit ? `Unverändert seit ${vk.leistung_min ? "mindestens " : ""}${esc(vk.leistung_seit)}` : "Noch nicht eingelesen", vk.leistung_dauer ? `<span class="pill">${esc(vk.leistung_dauer)}</span>` : "")}</div>
+  <section class="group"><h2 class="group-title">Zeitkonto und Urlaub</h2><div class="stats auto">
+    ${karte("Zeitkonto aktuell", vk.zk_aktuell != null ? sens(esc(deZahl(vk.zk_aktuell)) + " h") : "–", `Zum Vormonat ${delta(vk.zk_delta_vm, true, "h")}`)}</div>
     <div class="grid2">
-    <section class="plate span2"><h2 class="sec-title">Leistungsprozente</h2><p class="sec-sub">Stufen der Leistungsbeurteilung. Beim Antippen eines Monats steht die Entgeltgruppe im Tooltip.</p><div class="canvas-wrap"><canvas id="hL"></canvas></div></section>
     <section class="plate span2"><h2 class="sec-title">Zeitkonto</h2><p class="sec-sub">Stand (Linie, links) und Veränderung zum Vormonat (Balken, rechts).</p><div class="canvas-wrap"><canvas id="hZK"></canvas></div></section>
     <section class="plate span2"><h2 class="sec-title">Urlaubstage</h2><p class="sec-sub">Resturlaub laufendes Jahr, Vorjahr (gestrichelt) und Sonderurlaub T-Zug.</p><div class="canvas-wrap"><canvas id="hU"></canvas></div></section></div></section>`;
   if (vk.hat_schicht || sj) {
@@ -1766,15 +1768,6 @@ function initVerlauf(H) {
                       plugins: {tooltip: {callbacks: {label: c => c.dataset.label + ': ' + eur(c.parsed.y)}}}}
         }), ['gastro', 'fahrrad']);
 
-        reg(new Chart(ctx('hL'), {
-            type: 'line',
-            data: {labels: H.labels, datasets: [{label: 'Leistung', data: H.leistung, stepped: true, spanGaps: true, ...line(C.leistung)}]},
-            options: {...idx, scales: {y: {...noBorder, ticks: {callback: v => v + ' %'}}, x: noGridX},
-                      plugins: {legend: {display: false}, tooltip: {callbacks: {
-                          label: c => 'Leistung: ' + pct(c.parsed.y),
-                          footer: items => { const eg = H.eg[items[0].dataIndex + off]; return eg ? 'Entgeltgruppe: ' + eg : ''; }
-                      }}}}
-        }), ['leistung']);
 
         reg(new Chart(ctx('hQ'), {
             type: 'line',
