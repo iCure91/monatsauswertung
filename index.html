@@ -447,6 +447,7 @@
     <div id="dlgHost"></div>
     <div id="statusBar" class="statusbar" hidden></div>
     <input type="file" id="pdfInput" class="vh" accept="application/pdf,.pdf" multiple>
+    <input type="file" id="sicherungInput" class="vh" accept="application/json,.json">
 <script>
 
         // Falls die Diagramm-Bibliothek nicht ladbar ist (kein Internet), läuft die App ohne Diagramme weiter
@@ -1381,27 +1382,44 @@ function htmlVergleich(c) {
 }
 
 function htmlStart() {
+  const knopf = "display:inline-block;cursor:pointer;margin-top:8px;background:transparent;color:var(--ink);border:1px solid var(--line)";
   return `<section class="slip"><div class="slip-top"><div class="slip-head"><h1 class="year">Entgelt</h1><span class="pill">Offline-App</span></div>
     <p class="lede" style="margin:10px 0 18px">Lies deine Entgeltabrechnungen (PDF) ein und sieh Netto, Abzüge, Zeitkonto, Mehrarbeit und mehr übersichtlich ausgewertet.</p>
     <label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">PDF-Abrechnungen auswählen</label>
     <button type="button" class="btn" id="demoBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Demo mit Beispieldaten</button>
+    <label class="btn" for="sicherungInput" style="${knopf}">Sicherung laden</label>
     <p class="hint" style="margin-top:14px">Du kannst mehrere PDFs auf einmal auswählen, am besten alle Monate eines Zeitraums.</p></div>
     <div class="perf"></div><div class="slip-bottom"><div class="hero-label" style="margin-top:0">Deine Daten bleiben bei dir</div>
-    <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Es wird nichts gespeichert. Wenn du die Seite schließt, sind die Daten weg.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li></ul></div></section>
+    <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Standardmäßig wird nichts gespeichert: Schließt oder lädst du die Seite neu, sind die Daten weg. Unter „Daten“ kannst du sie auf diesem Gerät merken oder als Datei sichern.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li></ul></div></section>
     <p class="foot">Für die PDF-Auswertung und die Diagramme lädt die Seite zwei Bibliotheken aus dem Internet nach.</p>
     <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
 }
 
 function htmlDaten(c) {
   const monate = c.rows.filter(r => r.real).map(r => r.key), luecken = c.rows.filter(r => !r.real).map(r => r.key);
-  return `<h1 class="page-title">Daten</h1><p class="lede">${monate.length} ${plural(monate.length, "Monat", "Monate")} geladen${monate.length ? ` (${monate[0]} bis ${monate[monate.length - 1]})` : ""}.</p>
-  <div class="plate"><label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">Weitere PDFs hinzufügen</label>
-  <button type="button" class="btn" id="loeschBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Alle Daten löschen</button>
-  <p class="hint" style="margin-top:12px">Alles liegt nur im Arbeitsspeicher dieses Fensters. Beim Schließen oder Neuladen der Seite sind die Daten weg.</p></div>
-  ${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
+  const aus = "display:inline-block;cursor:pointer;background:transparent;color:var(--ink);border:1px solid var(--line)";
+  let h = `<h1 class="page-title">Daten</h1><p class="lede">${monate.length} ${plural(monate.length, "Monat", "Monate")} geladen${monate.length ? ` (${monate[0]} bis ${monate[monate.length - 1]})` : ""}.${c.demo ? " Es sind Demodaten mit erfundenen Zahlen." : ""}</p>`;
+  if (c.demo) {
+    h += `<div class="plate"><button type="button" class="btn" id="loeschBtn">Demo beenden</button>
+      <p class="hint" style="margin-top:12px">Bei Demodaten ist das Speichern abgeschaltet. Wähle PDFs oder lade eine Sicherung, um deine eigenen Daten zu sehen.</p>
+      <label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer;margin-top:4px">PDF-Abrechnungen auswählen</label>
+      <label class="btn" for="sicherungInput" style="${aus};margin-left:8px">Sicherung laden</label></div>`;
+  } else {
+    h += `<div class="plate"><label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">Weitere PDFs hinzufügen</label>
+      <button type="button" class="btn" id="loeschBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Alle Daten löschen</button>
+      <p class="hint" style="margin-top:12px">${c.merken ? "Die Daten sind auf diesem Gerät gespeichert und bleiben nach dem Neuladen erhalten." : "Die Daten liegen nur im Arbeitsspeicher dieses Fensters. Beim Schließen oder Neuladen der Seite sind sie weg."}</p></div>
+    <h2 class="sec-title section-gap" style="margin-bottom:8px">Merken und Sichern</h2>
+    <div class="plate"><label class="check" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" id="merkenChk" ${c.merken ? "checked" : ""} ${c.speicherOk ? "" : "disabled"} style="margin-top:4px">
+      <span><b>Auf diesem Gerät merken</b><br><span class="hint">Speichert die ausgelesenen Werte (nicht die PDFs) im Browser dieses Geräts. Nichts wird hochgeladen. Auf fremden oder geteilten Geräten besser ausgeschaltet lassen. ${c.speicherOk ? "" : "Hier ist Speichern nicht möglich, zum Beispiel im privaten Modus."}</span></span></label>
+      <div style="margin-top:14px"><button type="button" class="btn" id="sichernBtn" ${monate.length ? "" : "disabled"}>Als Datei sichern</button>
+      <label class="btn" for="sicherungInput" style="${aus};margin-left:8px">Datei laden</label></div>
+      <p class="hint" style="margin-top:12px">Die Sicherungsdatei enthält deine Werte unverschlüsselt. Bewahre sie sicher auf und gib sie nicht weiter. Safari auf dem iPhone kann gemerkte Daten nach etwa sieben Tagen ohne Besuch löschen, auch das Löschen des Browserverlaufs entfernt sie.</p></div>`;
+  }
+  h += `${luecken.length ? `<h2 class="sec-title section-gap" style="margin-bottom:8px">Fehlende Monate</h2><div class="plate"><p class="hint" style="margin:0">Zwischen dem ersten und letzten Monat fehlen: ${luecken.join(", ")}.</p></div>` : ""}
   <h2 class="sec-title section-gap" style="margin-bottom:8px">Hinweise beim Einlesen</h2>
   <div class="plate">${c.hinweise.length ? `<ul class="loglist">${c.hinweise.map(t => `<li><span>${esc(t)}</span></li>`).join("")}</ul>` : '<p class="hint" style="margin:0">Keine Auffälligkeiten.</p>'}</div>
   <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
+  return h;
 }
 
 const WECKER_SVG = wecker(18);
@@ -1825,7 +1843,7 @@ function initVergleich(V) {
 
 }
 /* ===== Anwendung: Zustand, Ansichtenwechsel, PDF-Einlesen im Browser (pdf.js), Demo ===== */
-const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [] };
+const APP = { ansicht: "start", jahr: null, vg: { jahre: null, monate: [], kennzahl: "netto", gleich: true }, eintraege: [], hinweise: [], demo: false, merken: false };
 let ROWS = [];
 const $ = s => document.querySelector(s);
 
@@ -1888,7 +1906,7 @@ function render() {
       bindVergleich();
       if (v.sel.length && v.monate.length) initVergleich(v);
     } else {
-      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise }); bindDaten();
+      chips.innerHTML = ""; host.innerHTML = htmlDaten({ rows: ROWS, hinweise: APP.hinweise, demo: APP.demo, merken: APP.merken, speicherOk: speicherMoeglich() }); bindDaten();
     }
   } catch (e) {
     console.error(e);
@@ -1909,7 +1927,17 @@ document.addEventListener("click", ev => {
   if (chip) { ev.preventDefault(); APP.jahr = +chip.dataset.jahr; render(); }
 });
 function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); }
-function bindDaten() { const b = $("#loeschBtn"); if (b) b.addEventListener("click", () => { if (confirm("Alle geladenen Daten aus diesem Fenster löschen?")) { APP.eintraege = []; APP.hinweise = []; APP.jahr = null; berechne(); APP.ansicht = "start"; render(); } }); }
+function bindDaten() {
+  const b = $("#loeschBtn");
+  if (b) b.addEventListener("click", () => {
+    const txt = APP.demo ? "Die Demo beenden?" : (APP.merken ? "Alle geladenen Daten löschen, auch die auf diesem Gerät gespeicherten?" : "Alle geladenen Daten aus diesem Fenster löschen?");
+    if (!confirm(txt)) return;
+    if (!APP.demo) lsDel(LS_DATEN);
+    APP.eintraege = []; APP.hinweise = []; APP.jahr = null; APP.demo = false; berechne(); APP.ansicht = "start"; render();
+  });
+  const m = $("#merkenChk"); if (m) m.addEventListener("change", () => { if (!setzeMerken(m.checked)) m.checked = APP.merken; render(); });
+  const sb = $("#sichernBtn"); if (sb) sb.addEventListener("click", sicherungHerunterladen);
+}
 function bindVergleich() {
   const f = $("#vgForm"); if (!f) return;
   f.addEventListener("submit", ev => {
@@ -1917,6 +1945,98 @@ function bindVergleich() {
     APP.vg = { jahre: fd.getAll("jahre").map(Number), monate: fd.getAll("monate").map(Number), kennzahl: fd.get("kennzahl") || "netto", gleich: fd.has("gleich") };
     render();
   });
+}
+
+/* ---------- Merken auf diesem Gerät und Sicherungsdatei ---------- */
+const LS_FLAG = "entgelt_merken", LS_DATEN = "entgelt_daten_v1";
+const ZAHL_SCHLUESSEL = ["Brutto (€)", "Netto (€)", "Gesetzl. Abzüge (€)", "Sonstige Abzüge (€)", "Ultimo (€)", "Rest (€)", "Gastronomie (€)", "Fahrrad (€)",
+  "Fahrrad Umwandlung (€)", "Fahrrad Zuschuss (€)", "Fahrrad GWV (€)", "Schichtdauer (h)", "Sonntag Nacht (h)", "Mehrarbeit Sonntag (h)", "Rufbereitschaft",
+  "Zeitkonto (h)", "Resturlaub lfd. Jahr (Tage)", "Resturlaub VJ (Tage)", "Sonderurlaub T-Zug (Tage)", "Wochenstunden", "Leistung (%)"];
+const TEXT_SCHLUESSEL = ["Entgeltgruppe", "Zuschläge (JSON)", "Rufbereitschaft (JSON)"];
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+let speicherTest = null;
+function speicherMoeglich() { if (speicherTest === null) { speicherTest = lsSet("entgelt_test", "1"); lsDel("entgelt_test"); } return speicherTest; }
+
+/* Fremde oder gespeicherte Daten prüfen: nur bekannte Felder, richtige Typen, jeder Monat einmal */
+function bereinigeEintraege(liste) {
+  const out = [], gesehen = new Set(); let verworfen = 0;
+  for (const e of Array.isArray(liste) ? liste : []) {
+    if (!e || typeof e !== "object" || typeof e.monat !== "string" || !/^(0[1-9]|1[0-2])\.\d{4}$/.test(e.monat) || gesehen.has(e.monat) || !e.abr || typeof e.abr !== "object") { verworfen++; continue; }
+    const abr = {};
+    for (const k of ZAHL_SCHLUESSEL) { const v = e.abr[k]; abr[k] = typeof v === "number" && isFinite(v) ? v : null; }
+    for (const k of TEXT_SCHLUESSEL) { const v = e.abr[k]; abr[k] = typeof v === "string" ? v.slice(0, 20000) : null; }
+    const ideen = (Array.isArray(e.ideen) ? e.ideen : []).filter(v => typeof v === "number" && isFinite(v)).slice(0, 60);
+    out.push({ monat: e.monat, abr, ideen, datei: typeof e.datei === "string" ? e.datei.slice(0, 120) : "" });
+    gesehen.add(e.monat);
+  }
+  return { eintraege: out, verworfen };
+}
+function paket() {
+  return { format: "entgelt-offline", version: 1, gespeichert: new Date().toISOString(), eintraege: APP.eintraege,
+    hinweise: APP.hinweise.filter(h => typeof h === "string").slice(0, 200) };
+}
+function speichereLokal() {
+  if (!APP.merken || APP.demo) return true;
+  if (!APP.eintraege.length) { lsDel(LS_DATEN); return true; }
+  const ok = lsSet(LS_DATEN, JSON.stringify(paket()));
+  if (!ok) status("Speichern auf diesem Gerät nicht möglich (Speicher voll oder gesperrt).", 6000);
+  return ok;
+}
+function ladeGespeichert() {
+  APP.merken = lsGet(LS_FLAG) === "1";
+  if (!APP.merken) return 0;
+  const roh = lsGet(LS_DATEN); if (!roh) return 0;
+  try {
+    const p = JSON.parse(roh); const { eintraege } = bereinigeEintraege(p && p.eintraege);
+    if (!eintraege.length) return 0;
+    APP.eintraege = eintraege; APP.hinweise = Array.isArray(p.hinweise) ? p.hinweise.filter(h => typeof h === "string").slice(0, 200) : [];
+    berechne(); APP.ansicht = "jahr"; return eintraege.length;
+  } catch (e) { lsDel(LS_DATEN); APP.hinweise.push("Die gespeicherten Daten waren beschädigt und wurden entfernt."); return 0; }
+}
+function setzeMerken(an) {
+  if (an) {
+    if (!lsSet(LS_FLAG, "1")) { status("Speichern im Browser ist hier nicht möglich (privater Modus oder gesperrt).", 6000); return false; }
+    APP.merken = true;
+    if (!speichereLokal()) { APP.merken = false; lsDel(LS_FLAG); return false; }
+    status("Gespeichert. Die Daten bleiben jetzt auf diesem Gerät.", 4000);
+  } else {
+    APP.merken = false; lsDel(LS_FLAG); lsDel(LS_DATEN); status("Gespeicherte Daten wurden von diesem Gerät entfernt.", 4000);
+  }
+  return true;
+}
+const istIos = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+async function sicherungHerunterladen() {
+  const name = `entgelt-sicherung-${new Date().toISOString().slice(0, 10)}.json`, text = JSON.stringify(paket());
+  try {                                    // iPhone: Teilen-Fenster mit "In Dateien sichern"
+    if (istIos() && navigator.canShare && window.File) {
+      const datei = new File([text], name, { type: "application/json" });
+      if (navigator.canShare({ files: [datei] })) { await navigator.share({ files: [datei], title: "Entgelt-Sicherung" }); return; }
+    }
+  } catch (e) { if (e && e.name === "AbortError") return; }
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" })), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  status("Sicherung heruntergeladen.", 4000);
+}
+async function ladeSicherung(file) {
+  try {
+    const p = JSON.parse(await file.text());
+    if (!p || p.format !== "entgelt-offline" || !Array.isArray(p.eintraege)) throw new Error("Das ist keine Sicherung dieser App.");
+    if (p.version > 1) throw new Error("Die Sicherung stammt aus einer neueren Version der App.");
+    const { eintraege, verworfen } = bereinigeEintraege(p.eintraege);
+    if (!eintraege.length) throw new Error("Die Sicherung enthält keine verwertbaren Monate.");
+    if (APP.eintraege.length && !APP.demo && !confirm("Die Sicherung ersetzt die aktuell geladenen Daten. Fortfahren?")) return;
+    APP.eintraege = eintraege; APP.demo = false; APP.jahr = null;
+    APP.hinweise = (Array.isArray(p.hinweise) ? p.hinweise.filter(h => typeof h === "string").slice(0, 200) : []);
+    if (verworfen) APP.hinweise.push(`Sicherung: ${verworfen} ungültige Einträge wurden übersprungen.`);
+    berechne(); speichereLokal(); APP.ansicht = "jahr";
+    status(`Sicherung geladen: ${eintraege.length} ${plural(eintraege.length, "Monat", "Monate")}.`, 5000); render();
+  } catch (e) {
+    const t = e instanceof SyntaxError ? "Die Datei ist keine gültige Sicherung." : (e && e.message || String(e));
+    status("Sicherung konnte nicht geladen werden: " + t, 7000);
+  } finally { const i = $("#sicherungInput"); if (i) i.value = ""; }
 }
 
 /* ---------- Status ---------- */
@@ -1964,7 +2084,7 @@ function systemInfo() {
   const dlg = !!(typeof HTMLDialogElement !== "undefined" && HTMLDialogElement.prototype.showModal) && !window.__dialogErsatz;
   return [`App-Version: ${APP_VERSION}`, `Browser: ${navigator.userAgent}`, `Adresse: ${location.protocol}//${location.host || "(lokale Datei)"}`,
     `Diagramme: ${window.__keinChart ? "nicht geladen" : "geladen"}`, `PDF-Bibliothek: ${window.pdfjsLib ? "geladen" : "wird beim ersten Einlesen geladen"}`,
-    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`].join("\n");
+    `Pop-ups: ${dlg ? "nativ" : "Ersatzlösung"}`, `Speicher für Einstellungen: ${ls}`, `Daten merken: ${APP.merken ? "an" : "aus"}`].join("\n");
 }
 
 /* ---------- PDF lesen (pdf.js liefert Textstücke mit Position; wir machen daraus Wörter) ---------- */
@@ -2007,6 +2127,7 @@ function nimmAuf(name, seiten, neu, hinweise) {
 async function ladeDateien(files) {
   const liste = [...files].filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
   if (!liste.length) { status("Bitte PDF-Dateien auswählen.", 4000); return; }
+  if (APP.demo) { APP.eintraege = []; APP.hinweise = []; APP.demo = false; berechne(); }
   const neu = [], hinweise = [];
   for (let i = 0; i < liste.length; i++) {
     status(`Lese ${liste[i].name} (${i + 1} von ${liste.length}) …`);
@@ -2014,7 +2135,7 @@ async function ladeDateien(files) {
     catch (e) { hinweise.push(`${liste[i].name}: konnte nicht gelesen werden (${e && e.message || e})`); }
   }
   APP.eintraege.push(...neu); APP.hinweise.push(...hinweise);
-  berechne();
+  berechne(); speichereLokal();
   status(neu.length ? `${neu.length} ${plural(neu.length, "Monat", "Monate")} eingelesen${hinweise.length ? `, ${hinweise.length} Hinweis${hinweise.length === 1 ? "" : "e"} unter „Daten“` : ""}.` : "Keine Abrechnung erkannt. Details unter „Daten“.", 6000);
   if (!ROWS.length) APP.ansicht = "daten"; else if (APP.ansicht === "start" || APP.ansicht === "daten") APP.ansicht = "jahr";
   if (neu.length) APP.jahr = null;
@@ -2043,15 +2164,19 @@ function demoEintraege() {
   }
   return out;
 }
-function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Alle Zahlen sind erfunden."]; APP.jahr = null; APP.ansicht = "jahr"; berechne(); render(); }
+function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Alle Zahlen sind erfunden."]; APP.demo = true; APP.jahr = null; APP.ansicht = "jahr"; berechne(); render(); }
 
 /* ---------- Start ---------- */
 function startApp() {
   const inp = $("#pdfInput");
   inp.addEventListener("change", () => { if (inp.files && inp.files.length) ladeDateien(inp.files); });
+  const sin = $("#sicherungInput");
+  sin.addEventListener("change", () => { if (sin.files && sin.files.length) ladeSicherung(sin.files[0]); });
+  const geladen = ladeGespeichert();
   window.addEventListener("dragover", e => e.preventDefault());
   window.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer && e.dataTransfer.files.length) ladeDateien(e.dataTransfer.files); });
   render();
+  if (geladen) status(`Gespeicherte Daten geladen: ${geladen} ${plural(geladen, "Monat", "Monate")}.`, 5000);
 }
 window.__app = { APP, render, ladeDemo, nimmAuf, berechne, ladeDateien, itemsZuWoertern, rows: () => ROWS };
 
