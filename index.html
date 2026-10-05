@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#ECF1EF" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#101F33" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="2026-10-05-update">
+    <meta name="app-version" content="2026-10-06-ideen">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Entgelt (Offline-App)</title>
 
@@ -1127,6 +1127,7 @@ function kpiJahr(rows, jahr) {
   return {
     jahr, brutto, netto, abzuege, sonstige, netto_quote: quote(netto, brutto),
     praemien, praemien_anzahl: dj.reduce((s, r) => s + r.anzahl, 0), praemien_anteil: quote(praemien, brutto),
+    praemien_schnitt: praemien != null && dj.reduce((s, r) => s + r.anzahl, 0) > 0 ? runde(praemien / dj.reduce((s, r) => s + r.anzahl, 0), 2) : null,
     netto_schnitt: netto != null && nMonate ? runde(netto / nMonate, 2) : null,
     delta_netto: pctChange(netto, ssum(vj.map(r => r.netto))), monate: nMonate,
     eg: egS.length ? egS[egS.length - 1] : null, eg_erste: egS.length ? egS[0] : null, eg_wechsel: new Set(egS).size > 1,
@@ -1334,7 +1335,7 @@ function htmlJahr(c) {
   h += `<section class="group"><h2 class="group-title">Entgelt</h2><div class="stats">`;
   h += kachel("brutto", "Brutto pro Monat", b && kpi.monate ? "Ø " + big(b / kpi.monate) : "–", `<span class="s">Durchschnitt über ${kpi.monate} ${plural(kpi.monate, "Monat", "Monate")}</span>`);
   h += kachel("netto_quote", "Netto-Quote", fPct(kpi.netto_quote), '<span class="s">Netto im Verhältnis zum Brutto</span>');
-  h += kachel("ideen", "Ideenprämien", big(kpi.praemien), `<span class="s">${kpi.praemien_anzahl} ${plural(kpi.praemien_anzahl, "Vorschlag", "Vorschläge")}, ${fPct(kpi.praemien_anteil)} vom Brutto</span>`);
+  h += kachel("ideen", "Ideenprämien", big(kpi.praemien), `<span class="s">${kpi.praemien_anzahl} ${plural(kpi.praemien_anzahl, "Vorschlag", "Vorschläge")}, ${fPct(kpi.praemien_anteil)} vom Brutto</span>`, kpi.praemien_schnitt != null ? `<span class="s" style="margin-top:6px">Ø ${fEur(kpi.praemien_schnitt)} pro Idee</span>` : "");
   if (kpi.ultimo_schnitt != null) {
     h += kachel("ultimo", "Ultimo im Jahr", big(kpi.ultimo_summe), `<span class="s">Ø ${fEur(kpi.ultimo_schnitt)} pro Monat</span>`, kpi.ultimo_delta != null ? `<span class="s" style="margin-top:6px">${delta(kpi.ultimo_delta, true, "%", " ggü. Vorjahr")}</span>` : "");
     h += kachel("rest", "Restüberweisung", big(kpi.rest_summe), `<span class="s">Summe im Jahr, Ø ${fEur(kpi.rest_schnitt)} pro Monat</span>`);
@@ -2375,7 +2376,7 @@ function status(text, dauerMs) {
 }
 
 /* ---------- Bibliotheken nachladen (mehrere Ausweichadressen) ---------- */
-const APP_VERSION = "2026-10-05-update";
+const APP_VERSION = "2026-10-06-ideen";
 function ladeSkript(urls) {
   return new Promise((resolve, reject) => {
     let i = 0;
