@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#ECF1EF" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#101F33" media="(prefers-color-scheme: dark)">
-    <meta name="app-version" content="2026-10-06-ideen">
+    <meta name="app-version" content="2026-10-07-tour">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Entgelt (Offline-App)</title>
 
@@ -393,6 +393,23 @@
                      font-size: .8rem; line-height: 1.4; word-break: break-word; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
         #fehlerBox[hidden] { display: none; }
         #fehlerBox button { float: right; margin-left: 10px; border: 0; background: rgba(255,255,255,.2); color: #fff; border-radius: 8px; padding: 2px 8px; font: inherit; }
+        /* Kurze Tour */
+        .tour-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 260; background: rgba(8, 16, 30, .6); display: flex; align-items: flex-end; justify-content: center; }
+        .tour-box { width: 100%; max-width: 560px; max-height: 94vh; box-sizing: border-box; background: var(--plate); color: var(--ink); border-radius: 28px 28px 0 0;
+                    display: flex; flex-direction: column; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: 0 -20px 60px -20px rgba(0, 0, 0, .5); }
+        @media (min-width: 760px) { .tour-overlay { align-items: center; } .tour-box { border-radius: 28px; } }
+        .tour-kopf { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 0 22px; }
+        .tour-track { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; outline: none; }
+        .tour-track::-webkit-scrollbar { display: none; }
+        .tour-slide { flex: 0 0 100%; box-sizing: border-box; scroll-snap-align: center; scroll-snap-stop: always; padding: 4px 22px 10px; overflow-y: auto; max-height: 68vh; }
+        .tour-bild { min-height: 180px; display: flex; align-items: center; justify-content: center; margin: 12px 0 14px; padding: 16px; box-sizing: border-box; background: var(--bg); border-radius: 20px; overflow: hidden; }
+        .tour-dots { display: flex; justify-content: center; gap: 8px; padding: 8px 0 4px; }
+        .tour-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; transition: width .2s, background .2s; }
+        .tour-dots button[aria-current="true"] { width: 22px; background: var(--ink); }
+        .tour-fuss { display: flex; justify-content: space-between; gap: 10px; padding: 8px 22px 18px; }
+        html[data-blur="1"] .tour * { filter: none !important; }
+        html[data-blur="1"] .tour .tour-blur { filter: blur(7px) !important; }
+        .tour-blur { filter: blur(7px); }
         /* Passwortabfrage */
         .pw-overlay { position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 250; background: rgba(8, 16, 30, .6); display: flex; align-items: flex-end; justify-content: center; }
         .pw-box { background: var(--plate); color: var(--ink); width: 100%; max-width: 520px; box-sizing: border-box; padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -428,6 +445,9 @@
                     Entgelt
                 </div>
                 <div class="top-actions">
+                    <button class="icon-btn" id="tourBtn" type="button" aria-label="Kurze Tour" title="Kurze Tour">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.3a2.6 2.6 0 1 1 3.7 2.4c-.8.4-1.2 1-1.2 1.9M12 17h.01"/></svg>
+                    </button>
                     <button class="icon-btn" id="blurBtn" type="button" aria-label="Werte verwischen" aria-pressed="false" title="Werte verwischen">
                         <svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
                         <svg class="eye-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
@@ -1466,6 +1486,7 @@ function htmlStart(c) {
     <label class="btn" for="pdfInput" style="display:inline-block;cursor:pointer">PDF-Abrechnungen auswählen</label>
     <button type="button" class="btn" id="demoBtn" style="margin-left:8px;background:transparent;color:var(--ink);border:1px solid var(--line)">Demo mit Beispieldaten</button>
     <label class="btn" for="sicherungInput" style="${knopf}">Sicherung laden</label>
+    <button type="button" class="btn" id="tourStartBtn" style="${knopf};margin-left:8px">Kurze Tour</button>
     <p class="hint" style="margin-top:14px">Du kannst mehrere PDFs auf einmal auswählen, am besten alle Monate eines Zeitraums.</p></div>
     <div class="perf"></div><div class="slip-bottom"><div class="hero-label" style="margin-top:0">Deine Daten bleiben bei dir</div>
     <ul class="hint" style="margin:6px 0 0;padding-left:18px"><li>Die PDFs werden direkt in diesem Browser gelesen und nicht hochgeladen.</li><li>Standardmäßig wird nichts gespeichert: Schließt oder lädst du die Seite neu, sind die Daten weg. Unter „Daten“ kannst du sie auf diesem Gerät merken oder als Datei sichern.</li><li>Mit dem Auge oben rechts kannst du alle Werte verwischen, zum Beispiel beim Vorführen.</li><li>Tipp: Unter „Daten“ steht, wie du die Seite als App auf den Home-Bildschirm legst.</li></ul></div></section>
@@ -1546,6 +1567,54 @@ function htmlDaten(c) {
   ${htmlDatenort()}
   <details class="plate" style="margin-top:12px"><summary class="hint" style="cursor:pointer">Systemprüfung</summary><pre style="white-space:pre-wrap;word-break:break-word;font-size:.78rem;margin:10px 0 0">${esc(systemInfo())}</pre></details>`;
   return h;
+}
+
+/* ===== Kurze Tour: wischbare Seiten, die zeigen, was die App kann ===== */
+const TOUR_BILD = {
+  willkommen: () => `<svg width="104" height="104" viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" rx="22" fill="#101F33"/><rect x="22" y="30" width="14" height="44" rx="7" fill="#14A38B"/><rect x="41" y="18" width="14" height="56" rx="7" fill="#D6336C"/><rect x="60" y="42" width="14" height="32" rx="7" fill="#E3A008"/></svg>`,
+  einlesen: () => `<div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px"><svg width="52" height="66" viewBox="0 0 64 80" aria-hidden="true"><path d="M8 4h34l16 16v56H8z" fill="#fff" stroke="#8794A5" stroke-width="2"/><path d="M42 4v16h16" fill="none" stroke="#8794A5" stroke-width="2"/><path d="M16 34h32M16 44h32M16 54h22" stroke="#B8C2CF" stroke-width="3" stroke-linecap="round"/><text x="14" y="26" font-size="9" font-weight="700" fill="#D6336C" font-family="system-ui">PDF</text></svg>
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    <div class="stats" style="grid-template-columns:1fr;flex:1 1 120px;min-width:0"><div class="stat"><span class="k">Netto</span><span class="v">3.210<span class="cents">,45 €</span></span><span class="s">Juni 2026</span></div></div></div>`,
+  jahr: () => `<div style="width:100%"><div class="chips" style="margin-bottom:12px;padding:0"><span class="chip">2026</span><span class="chip active"><span class="raise">▲</span>2025</span><span class="chip"><span class="raise">▲</span>2024</span></div>
+    <div class="hero-label" style="margin-top:0">Netto ausgezahlt</div><div class="hero-num" style="font-size:2.2rem">38.360<span class="cents">,00 €</span></div>
+    <div class="split" style="margin:10px 0"><span class="seg netto" style="flex:64 1 0"></span><span class="seg abzug" style="flex:35 1 0"></span><span class="seg sonst" style="flex:1 1 0"></span></div>
+    <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><span class="k">Brutto pro Monat</span><span class="v">Ø 5.449<span class="cents">,82 €</span></span>${peek()}</div><div class="stat"><span class="k">Ultimo im Jahr</span><span class="v">35.867<span class="cents">,14 €</span></span>${peek()}</div></div></div>`,
+  stufe: () => `<ol class="steps" style="width:100%;margin:0"><li class="step" style="--c:#0F8F7A"><span class="pin" aria-hidden="true"></span><div><div class="step-title">Entgeltgruppe 12 mit 15 % Leistung <span class="pill">aktuell</span></div><div class="step-meta"><span>Apr 2025 bis Sep 2026</span><span class="pill">1 Jahr und 6 Monate</span></div><div class="chipline"><span class="delta up">▲ Leistung von 12 % auf 15 %</span></div></div></li>
+    <li class="step" style="--c:#4A5CF0"><span class="pin" aria-hidden="true"></span><div><div class="step-title">Entgeltgruppe 11 mit 12 % Leistung</div><div class="step-meta"><span>Jan 2023 bis Jun 2024</span><span class="pill">1 Jahr und 6 Monate</span></div></div></li></ol>`,
+  mehrarbeit: () => `<div style="width:100%"><div class="mstrip" style="margin:0 0 10px">${[["Jan", 1, .3], ["Feb", 0, 0], ["Mär", 2, .76, true], ["Apr", 1, .3], ["Mai", 0, 0], ["Jun", 2, .76]].map(([m, n, a, r]) => `<div class="mcell${a > .5 ? " dunkel" : ""}" style="--a:${a}">${r ? `<span class="wbadge">${wecker(12)}</span>` : ""}<span class="mn">${m}</span><span class="mv">${n}</span></div>`).join("")}</div>
+    <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat"><span class="k">Nachtschicht&shy;wochen</span><span class="v">9<span class="cents"> Wochen</span></span></div><div class="stat"><span class="k">Mehrarbeit Sonntag</span><span class="v">68,00<span class="cents"> Std.</span></span></div></div></div>`,
+  verlauf: () => `<div style="width:100%"><div class="chips" style="padding:0;margin-bottom:12px"><span class="chip">12 Monate</span><span class="chip">24 Monate</span><span class="chip">Alles</span><span class="chip active">Zeitraum</span></div>
+    <div class="plate filter" style="margin:0"><p class="grp-title">Zeitraum</p><div class="row-opts"><label>Von <select disabled><option>10.2023</option></select></label><label>bis <select disabled><option>03.2026</option></select></label></div></div></div>`,
+  vergleich: () => `<div style="width:100%"><div class="togs" style="margin-bottom:12px">${["2023", "2024", "2025"].map((j, i) => `<label class="tog"><input type="checkbox" ${i > 0 ? "checked" : ""} disabled><span>${j}</span></label>`).join("")}</div>
+    <div style="display:flex;align-items:flex-end;gap:10px;height:96px">${[[58, 70], [62, 80], [55, 66], [66, 84]].map(([a, b2]) => `<div style="flex:1;display:flex;align-items:flex-end;gap:4px;height:100%"><span style="flex:1;height:${a}%;background:#8794A5;border-radius:6px"></span><span style="flex:1;height:${b2}%;background:#4A5CF0;border-radius:6px"></span></div>`).join("")}</div></div>`,
+  verwischen: () => `<div style="display:flex;align-items:center;gap:16px"><span style="display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--ink);color:var(--bg)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 5.2A10.6 10.6 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.5 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></span>
+    <div class="stats" style="grid-template-columns:1fr;min-width:0;flex:1 1 120px"><div class="stat"><span class="k">Netto</span><span class="v tour-blur">3.210,45 €</span><span class="s tour-blur">Ø 3.718,56 € pro Monat</span></div></div></div>`,
+  merken: () => `<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><span class="pill">Auf diesem Gerät merken</span><span class="pill">Mit Passwort verschlüsseln</span><span class="pill">Als Datei sichern und laden</span><span class="pill">Alles löschen mit einem Tipp</span></div>`,
+  app: () => `<div style="display:flex;align-items:center;gap:16px"><svg width="72" height="72" viewBox="0 0 96 96" aria-hidden="true"><rect width="96" height="96" rx="22" fill="#101F33"/><rect x="22" y="30" width="14" height="44" rx="7" fill="#14A38B"/><rect x="41" y="18" width="14" height="56" rx="7" fill="#D6336C"/><rect x="60" y="42" width="14" height="32" rx="7" fill="#E3A008"/></svg><div class="hint" style="margin:0">Teilen<br>▸ Zum Home-Bildschirm</div></div>`,
+};
+const TOUR = [
+  { t: "Willkommen", b: "willkommen", x: "Diese App liest deine Entgeltabrechnungen (PDF) ein und wertet sie übersichtlich aus. Alles läuft auf deinem Gerät, nichts wird hochgeladen. Wische nach links oder tippe auf „Weiter“." },
+  { t: "PDFs einlesen", b: "einlesen", x: "Wähle mehrere Abrechnungen auf einmal aus, am besten alle Monate eines Zeitraums. Fehlende Monate und Auffälligkeiten stehen unter „Daten“. Zum Ausprobieren gibt es eine Demo mit erfundenen Zahlen." },
+  { t: "Die Jahresübersicht", b: "jahr", x: "Oben das Netto des Jahres und wohin das Brutto fließt, darunter Kacheln zu Entgelt, Zeitkonto, Mehrarbeit und eigenen Kosten. Mit den Jahres-Chips wechselst du das Jahr, ▲ markiert Jahre mit Erhöhung. Kacheln mit dem kleinen Balken-Symbol kannst du antippen: Sie zeigen die zwölf Monate im Vergleich zum Vorjahr." },
+  { t: "Stufe und Erhöhungen", b: "stufe", x: "Entgeltgruppe und Leistung stehen ganz oben. Tippen zeigt den gesamten Verlauf mit allen Erhöhungen, der Dauer und dem durchschnittlichen Brutto je Stufe." },
+  { t: "Mehrarbeit", b: "mehrarbeit", x: "Nachtschichtwochen werden aus den Sonntagen mit Nachtschicht gezählt, Mehrarbeit an Sonntagen ohne Nachtschicht steht daneben. Im Monatsstreifen markiert ein roter Wecker die Rufbereitschaft. Einen Monat antippen zeigt die Details." },
+  { t: "Verlauf und Zeitraum", b: "verlauf", x: "Der Verlauf zeigt alle Monate in Diagrammen. Mit „12 Monate“, „24 Monate“, „Alles“ oder einem freien Zeitraum passen sich Diagramme, Kennzahlen und Tabellen an." },
+  { t: "Vergleich", b: "vergleich", x: "Stelle Jahre und einzelne Monate nebeneinander, zum Beispiel das Netto jeden März. Dafür stehen viele Kennzahlen bereit, vom Brutto bis zu den Nachtschichtwochen." },
+  { t: "Zum Vorzeigen: Verwischen", b: "verwischen", x: "Das Auge oben rechts verwischt alle Zahlen, damit du die App zeigen kannst, ohne dass jemand Beträge sieht. In einem Pop-up blendet der Auge-Knopf die Werte bei Bedarf ein." },
+  { t: "Merken und Sichern", b: "merken", x: "Standardmäßig wird nichts gespeichert. Auf Wunsch merkt sich die App deine Werte auf dem Gerät, auch mit Passwort verschlüsselt, oder du sicherst sie als Datei. Die PDFs selbst werden nie gespeichert." },
+  { t: "Als App nutzen", b: "app", x: "Lege die Seite auf den Home-Bildschirm. Sie startet dann wie eine App, auch ohne Internet. Unter „Daten“ stehen Version, Updates und die Erklärung, wo deine Daten liegen." },
+];
+function htmlTour(c) {
+  c = c || {};
+  const letzte = TOUR.length - 1;
+  const folien = TOUR.map((s, i) => `<section class="tour-slide" aria-roledescription="Seite" aria-label="${i + 1} von ${TOUR.length}"><h2 class="sec-title" style="margin:6px 0 0">${esc(s.t)}</h2>
+      <div class="tour-bild" aria-hidden="true">${TOUR_BILD[s.b]()}</div><p style="margin:0;line-height:1.5">${esc(s.x)}</p>
+      ${i === letzte ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">${c.keineDaten ? `<button type="button" class="btn" id="tourDemo">Demo ansehen</button><label class="btn pw-sek" for="pdfInput" id="tourPdf" style="cursor:pointer">PDFs auswählen</label>` : ""}</div>` : ""}</section>`).join("");
+  return `<div class="tour-box tour" role="document"><div class="tour-kopf"><span class="hint" id="tourZaehler" aria-live="polite" style="margin:0">1 von ${TOUR.length}</span>
+      <button type="button" class="icon-btn" id="tourZu" aria-label="Tour schließen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="tour-track" tabindex="0" aria-label="Seiten der Tour, nach links oder rechts wischen">${folien}</div>
+    <div class="tour-dots" role="group" aria-label="Seite wählen">${TOUR.map((s, i) => `<button type="button" aria-label="Seite ${i + 1}: ${esc(s.t)}" aria-current="${i === 0}"></button>`).join("")}</div>
+    <div class="tour-fuss"><button type="button" class="btn pw-sek" id="tourZurueck" disabled>Zurück</button><button type="button" class="btn" id="tourWeiter">Weiter</button></div></div>`;
 }
 
 const WECKER_SVG = wecker(18);
@@ -2126,7 +2195,7 @@ document.addEventListener("click", ev => {
   const chip = ev.target.closest("a.chip[data-jahr]");
   if (chip) { ev.preventDefault(); APP.jahr = +chip.dataset.jahr; render(); }
 });
-function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); const e = $("#entsperrenBtn"); if (e) e.addEventListener("click", entsperreSpeicher); }
+function bindStart() { const d = $("#demoBtn"); if (d) d.addEventListener("click", ladeDemo); const tb = $("#tourStartBtn"); if (tb) tb.addEventListener("click", oeffneTour); const e = $("#entsperrenBtn"); if (e) e.addEventListener("click", entsperreSpeicher); }
 function bindDaten() {
   const b = $("#loeschBtn");
   if (b) b.addEventListener("click", () => {
@@ -2367,6 +2436,44 @@ async function ladeSicherung(file) {
   } finally { const i = $("#sicherungInput"); if (i) i.value = ""; }
 }
 
+/* ---------- Kurze Tour ---------- */
+function oeffneTour() {
+  if (document.querySelector(".tour-overlay")) return;
+  const davor = document.activeElement;
+  const ov = document.createElement("div"); ov.className = "tour-overlay"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true"); ov.setAttribute("aria-label", "Kurze Tour");
+  ov.innerHTML = htmlTour({ keineDaten: !ROWS.length });
+  document.body.appendChild(ov);
+  const bodyOverflow = document.body.style.overflow; document.body.style.overflow = "hidden";
+  const track = ov.querySelector(".tour-track"), dots = [...ov.querySelectorAll(".tour-dots button")], zurueck = ov.querySelector("#tourZurueck"), weiter = ov.querySelector("#tourWeiter"), zaehler = ov.querySelector("#tourZaehler");
+  let aktuell = 0;
+  const breite = () => track.clientWidth || 1;
+  const zeige = i => {
+    aktuell = i; dots.forEach((d, k) => d.setAttribute("aria-current", String(k === i)));
+    zurueck.disabled = i === 0; weiter.textContent = i === TOUR.length - 1 ? "Fertig" : "Weiter"; zaehler.textContent = `${i + 1} von ${TOUR.length}`;
+  };
+  const geheZu = (i, weich) => { i = Math.max(0, Math.min(TOUR.length - 1, i)); try { track.scrollTo({ left: i * breite(), behavior: weich === false ? "auto" : "smooth" }); } catch (e) { track.scrollLeft = i * breite(); } zeige(i); };
+  const taste = e => {
+    if (e.key === "Escape") { e.stopPropagation(); schliessen(); }
+    else if (e.key === "ArrowRight") geheZu(aktuell + 1);
+    else if (e.key === "ArrowLeft") geheZu(aktuell - 1);
+  };
+  const groesse = () => geheZu(aktuell, false);
+  function schliessen() {
+    document.removeEventListener("keydown", taste, true); window.removeEventListener("resize", groesse);
+    ov.remove(); document.body.style.overflow = bodyOverflow; try { if (davor && davor.focus) davor.focus(); } catch (e) {}
+  }
+  track.addEventListener("scroll", () => { const i = Math.round(track.scrollLeft / breite()); if (i !== aktuell && i >= 0 && i < TOUR.length) zeige(i); }, { passive: true });
+  zurueck.addEventListener("click", () => geheZu(aktuell - 1));
+  weiter.addEventListener("click", () => aktuell === TOUR.length - 1 ? schliessen() : geheZu(aktuell + 1));
+  dots.forEach((d, k) => d.addEventListener("click", () => geheZu(k)));
+  ov.querySelector("#tourZu").addEventListener("click", schliessen);
+  ov.addEventListener("click", e => { if (e.target === ov) schliessen(); });
+  const demo = ov.querySelector("#tourDemo"); if (demo) demo.addEventListener("click", () => { schliessen(); ladeDemo(); });
+  const pdf = ov.querySelector("#tourPdf"); if (pdf) pdf.addEventListener("click", () => setTimeout(schliessen, 0));
+  document.addEventListener("keydown", taste, true); window.addEventListener("resize", groesse);
+  setTimeout(() => weiter.focus(), 50);
+}
+
 /* ---------- Status ---------- */
 let statusTimer = null;
 function status(text, dauerMs) {
@@ -2376,7 +2483,7 @@ function status(text, dauerMs) {
 }
 
 /* ---------- Bibliotheken nachladen (mehrere Ausweichadressen) ---------- */
-const APP_VERSION = "2026-10-06-ideen";
+const APP_VERSION = "2026-10-07-tour";
 function ladeSkript(urls) {
   return new Promise((resolve, reject) => {
     let i = 0;
@@ -2548,6 +2655,7 @@ function ladeDemo() { APP.eintraege = demoEintraege(); APP.hinweise = ["Demo: Al
 function startApp() {
   const inp = $("#pdfInput");
   inp.addEventListener("change", () => { if (inp.files && inp.files.length) ladeDateien(inp.files); });
+  const tour = $("#tourBtn"); if (tour) tour.addEventListener("click", oeffneTour);
   const sin = $("#sicherungInput");
   sin.addEventListener("change", () => { if (sin.files && sin.files.length) ladeSicherung(sin.files[0]); });
   const gespeichert = ladeGespeichert();
